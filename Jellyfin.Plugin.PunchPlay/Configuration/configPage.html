@@ -78,8 +78,6 @@
       var sessionId = null;
       var expiresAt = null;
 
-      console.log('[PunchPlay] script loaded');
-
       function el(id) { return document.getElementById(id); }
 
       function setStatus(msg) {
@@ -174,8 +172,7 @@
             showDisconnected();
           }
           if (data.punchPlayUrl) el('pp-url-input').value = data.punchPlayUrl;
-        }).catch(function (err) {
-          console.log('[PunchPlay] loadStatus error', err);
+        }).catch(function () {
           showDisconnected();
           setStatus('Could not load PunchPlay connection status.');
         });
@@ -198,7 +195,6 @@
       }
 
       function startLogin() {
-        console.log('[PunchPlay] startLogin called');
         var btn = el('pp-login-btn');
         btn.disabled = true;
         setStatus('Starting PunchPlay login...');
@@ -208,8 +204,7 @@
           sessionId = data.sessionId;
           showAuthFlow(data.userCode, data.qrDataUri, data.expiresIn);
           pollTimer = setInterval(poll, 3000);
-        }).catch(function (err) {
-          console.log('[PunchPlay] auth/start error', err);
+        }).catch(function () {
           btn.disabled = false;
           setStatus('Could not reach PunchPlay. Check the URL in Advanced settings.');
         });
@@ -227,7 +222,6 @@
       }
 
       function saveAdvanced() {
-        console.log('[PunchPlay] saveAdvanced called');
         var url = (el('pp-url-input').value || 'https://punchplay.tv').trim().replace(/\/$/, '');
         var interval = parseInt(el('pp-interval-input').value, 10) || 30;
 
@@ -246,18 +240,10 @@
       }
 
       function bindButtons() {
-        console.log('[PunchPlay] bindButtons called');
         var loginBtn = el('pp-login-btn');
-        if (!loginBtn) {
-          console.log('[PunchPlay] login button NOT found');
-          return;
-        }
-        if (loginBtn._ppBound) {
-          console.log('[PunchPlay] already bound, skipping');
-          return;
-        }
+        if (!loginBtn || loginBtn._ppBound) return;
         loginBtn._ppBound = true;
-        console.log('[PunchPlay] binding click handlers');
+
         loginBtn.addEventListener('click', startLogin);
         el('pp-disconnect-btn').addEventListener('click', disconnect);
         el('pp-cancel-btn').addEventListener('click', function () { stopPoll(); showDisconnected(); });
@@ -272,27 +258,14 @@
         loadStatus();
       }
 
-      // Primary: pageshow lifecycle event
       var page = document.querySelector('#PunchPlayConfigPage');
-      console.log('[PunchPlay] page element:', page ? 'found' : 'NOT FOUND');
-
       if (page) {
-        page.addEventListener('pageshow', function () {
-          console.log('[PunchPlay] pageshow fired');
-          bindButtons();
-        });
-        page.addEventListener('viewshow', function () {
-          console.log('[PunchPlay] viewshow fired');
-          bindButtons();
-        });
+        page.addEventListener('pageshow', bindButtons);
+        page.addEventListener('viewshow', bindButtons);
         page.addEventListener('viewhide', stopPoll);
       }
 
-      // Fallback: bind directly after a short delay
-      setTimeout(function () {
-        console.log('[PunchPlay] setTimeout fallback running');
-        bindButtons();
-      }, 500);
+      setTimeout(bindButtons, 500);
 
     }());
   </script>

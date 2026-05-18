@@ -8,6 +8,14 @@
     "owner": "PunchPlay",
     "versions": [
       {
+        "version": "1.0.7.0",
+        "changelog": "Fix: Config page buttons now work reliably.",
+        "targetAbi": "10.10.0.0",
+        "sourceUrl": "https://github.com/PunchPlay/jellyfin-plugin-punchplay/releases/download/v1.0.7/jellyfin-plugin-punchplay_1.0.7.zip",
+        "checksum": "92656b1924a9921cfbf0cefb0d85c0b6",
+        "timestamp": "2026-05-18T07:00:00Z"
+      },
+      {
         "version": "1.0.6.0",
         "changelog": "Diagnostic: add console logging and multiple binding strategies to trace button issue.",
         "targetAbi": "10.10.0.0",
