@@ -1,0 +1,110 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>Jellyfin.Plugin.PunchPlay</name>
+    </assembly>
+    <members>
+        <member name="T:Jellyfin.Plugin.PunchPlay.DeviceAuthService">
+            <summary>
+            Manages in-progress device auth sessions (code → token polling).
+            </summary>
+        </member>
+        <member name="M:Jellyfin.Plugin.PunchPlay.DeviceAuthService.StartAsync(System.Threading.CancellationToken)">
+            <summary>
+            Starts a device auth flow and returns the user-facing code and QR image.
+            </summary>
+        </member>
+        <member name="M:Jellyfin.Plugin.PunchPlay.DeviceAuthService.PollAsync(System.String,System.Threading.CancellationToken)">
+            <summary>
+            Polls PunchPlay for token completion. Returns null while still pending,
+            throws <see cref="T:System.InvalidOperationException"/> if the session is unknown/expired.
+            </summary>
+        </member>
+        <member name="T:Jellyfin.Plugin.PunchPlay.PlaybackScrobbler">
+            <summary>
+            Subscribes to Jellyfin playback events and scrobbles to PunchPlay.
+            </summary>
+        </member>
+        <member name="M:Jellyfin.Plugin.PunchPlay.PlaybackScrobbler.StartAsync(System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Jellyfin.Plugin.PunchPlay.PlaybackScrobbler.StopAsync(System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Jellyfin.Plugin.PunchPlay.PlaybackScrobbler.Dispose">
+            <inheritdoc />
+        </member>
+        <member name="T:Jellyfin.Plugin.PunchPlay.Plugin">
+            <summary>
+            PunchPlay Jellyfin plugin — scrobbles playback to punchplay.tv.
+            </summary>
+        </member>
+        <member name="P:Jellyfin.Plugin.PunchPlay.Plugin.Name">
+            <inheritdoc />
+        </member>
+        <member name="P:Jellyfin.Plugin.PunchPlay.Plugin.Id">
+            <inheritdoc />
+        </member>
+        <member name="P:Jellyfin.Plugin.PunchPlay.Plugin.Description">
+            <inheritdoc />
+        </member>
+        <member name="P:Jellyfin.Plugin.PunchPlay.Plugin.Instance">
+            <summary>Singleton accessor used by controllers and services.</summary>
+        </member>
+        <member name="M:Jellyfin.Plugin.PunchPlay.Plugin.GetPages">
+            <inheritdoc />
+        </member>
+        <member name="P:Jellyfin.Plugin.PunchPlay.Plugin.AccessToken">
+            <summary>Convenience accessor for the saved token.</summary>
+        </member>
+        <member name="P:Jellyfin.Plugin.PunchPlay.Plugin.ApiBase">
+            <summary>Base URL without trailing slash.</summary>
+        </member>
+        <member name="T:Jellyfin.Plugin.PunchPlay.PluginConfiguration">
+            <summary>
+            Persisted plugin configuration (stored as XML by Jellyfin).
+            </summary>
+        </member>
+        <member name="P:Jellyfin.Plugin.PunchPlay.PluginConfiguration.AccessToken">
+            <summary>Bearer token obtained via device auth flow.</summary>
+        </member>
+        <member name="P:Jellyfin.Plugin.PunchPlay.PluginConfiguration.PunchPlayUsername">
+            <summary>PunchPlay username shown in settings after login.</summary>
+        </member>
+        <member name="P:Jellyfin.Plugin.PunchPlay.PluginConfiguration.ConnectedAt">
+            <summary>UTC timestamp of when the token was issued.</summary>
+        </member>
+        <member name="P:Jellyfin.Plugin.PunchPlay.PluginConfiguration.PunchPlayUrl">
+            <summary>Base URL of the PunchPlay API (allows self-hosted overrides).</summary>
+        </member>
+        <member name="P:Jellyfin.Plugin.PunchPlay.PluginConfiguration.ProgressIntervalSeconds">
+            <summary>Progress heartbeat interval in seconds. Lower = more frequent API calls.</summary>
+        </member>
+        <member name="T:Jellyfin.Plugin.PunchPlay.PluginServiceRegistrator">
+            <summary>
+            Registers plugin services with Jellyfin's DI container.
+            </summary>
+        </member>
+        <member name="M:Jellyfin.Plugin.PunchPlay.PluginServiceRegistrator.RegisterServices(Microsoft.Extensions.DependencyInjection.IServiceCollection,MediaBrowser.Controller.IServerApplicationHost)">
+            <inheritdoc />
+        </member>
+        <member name="T:Jellyfin.Plugin.PunchPlay.PunchPlayController">
+            <summary>
+            REST endpoints used by the plugin config page.
+            All endpoints require Jellyfin admin authentication.
+            </summary>
+        </member>
+        <member name="M:Jellyfin.Plugin.PunchPlay.PunchPlayController.Status">
+            <summary>Returns current connection status.</summary>
+        </member>
+        <member name="M:Jellyfin.Plugin.PunchPlay.PunchPlayController.StartAuth(System.Threading.CancellationToken)">
+            <summary>Starts a device auth flow and returns the user code + QR image.</summary>
+        </member>
+        <member name="M:Jellyfin.Plugin.PunchPlay.PunchPlayController.PollAuth(System.String,System.Threading.CancellationToken)">
+            <summary>Polls for device auth completion. Returns 202 while pending, 200 on success, 410 if expired.</summary>
+        </member>
+        <member name="M:Jellyfin.Plugin.PunchPlay.PunchPlayController.Disconnect">
+            <summary>Disconnects the current token.</summary>
+        </member>
+    </members>
+</doc>
