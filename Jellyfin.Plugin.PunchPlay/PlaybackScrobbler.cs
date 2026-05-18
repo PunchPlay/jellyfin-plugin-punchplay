@@ -103,8 +103,18 @@ public sealed class PlaybackScrobbler : IHostedService, IDisposable
             var response = await client.PostAsJsonAsync(
                 $"{plugin.ApiBase}/api/scrobble/{action}", payload).ConfigureAwait(false);
 
-            if (!response.IsSuccessStatusCode)
+            if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                _logger.LogWarning("[PunchPlay] Token revoked — clearing stored credentials");
+                var cfg = plugin.Configuration;
+                cfg.AccessToken = string.Empty;
+                cfg.ConnectedAt = null;
+                plugin.SaveConfiguration(cfg);
+            }
+            else if (!response.IsSuccessStatusCode)
+            {
                 _logger.LogWarning("[PunchPlay] Scrobble {Action} returned {Status}", action, response.StatusCode);
+            }
         }
         catch (Exception ex)
         {
