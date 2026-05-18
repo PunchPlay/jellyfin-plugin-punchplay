@@ -34,6 +34,7 @@
             <p style="margin:0 0 1em">Connect your PunchPlay account to automatically scrobble what you watch.</p>
             <button id="pp-login-btn" is="emby-button" class="raised button-submit">Login with PunchPlay</button>
           </div>
+          <p id="pp-status" class="fieldDescription" style="margin:1em 0 0"></p>
         </div>
       </div>
 
@@ -43,7 +44,7 @@
           <p style="margin:0 0 .5em;font-size:.9em;color:#aaa">Visit <strong>punchplay.tv/link</strong> and enter this code:</p>
           <div id="pp-user-code" style="font-size:2.5em;font-weight:700;letter-spacing:.2em;color:#00b4d8;margin:.5em 0"></div>
           <img id="pp-qr" src="" alt="QR code" style="width:160px;height:160px;border-radius:8px;margin:.5em auto;display:block" />
-          <p style="margin:.5em 0 0;font-size:.8em;color:#777">Waiting for approval… <span id="pp-expires-in"></span></p>
+          <p style="margin:.5em 0 0;font-size:.8em;color:#777">Waiting for approval... <span id="pp-expires-in"></span></p>
           <button id="pp-cancel-btn" is="emby-button" class="raised cancel" style="margin-top:1em">Cancel</button>
         </div>
       </div>
@@ -74,11 +75,25 @@
 (function () {
   'use strict';
 
+  var PLUGIN_ID = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
   var pollTimer = null;
   var sessionId = null;
   var expiresAt = null;
 
   function el(id) { return document.getElementById(id); }
+
+  function setStatus(message) {
+    var status = el('pp-status');
+    if (status) status.textContent = message || '';
+  }
+
+  function parseJsonResponse(response) {
+    if (typeof response === 'string' && response.length) {
+      return JSON.parse(response);
+    }
+
+    return response || {};
+  }
 
   function formatDate(iso) {
     if (!iso) return '';
@@ -91,6 +106,7 @@
     el('pp-auth-flow').style.display = 'none';
     el('pp-username-label').textContent = username || 'Connected';
     el('pp-connected-date').textContent = formatDate(connectedAt);
+    setStatus('Connected to PunchPlay.');
     stopPoll();
   }
 
@@ -98,6 +114,7 @@
     el('pp-disconnected-view').style.display = '';
     el('pp-connected-view').style.display = 'none';
     el('pp-auth-flow').style.display = 'none';
+    setStatus('Not connected.');
     stopPoll();
   }
 
@@ -108,6 +125,7 @@
     el('pp-user-code').textContent = code;
     el('pp-qr').src = qr;
     expiresAt = Date.now() + expiresSec * 1000;
+    setStatus('Waiting for approval in PunchPlay.');
     tickExpiry();
   }
 
@@ -124,15 +142,31 @@
   }
 
   function apiGet(path) {
-    return ApiClient.ajax({ type: 'GET', url: ApiClient.getUrl(path), dataType: 'json' });
+    return ApiClient.ajax({
+      type: 'GET',
+      method: 'GET',
+      url: ApiClient.getUrl(path),
+      dataType: 'json'
+    }).then(parseJsonResponse);
   }
 
-  function apiPost(path) {
-    return ApiClient.ajax({ type: 'POST', url: ApiClient.getUrl(path), dataType: 'json' });
+  function apiPost(path, data) {
+    return ApiClient.ajax({
+      type: 'POST',
+      method: 'POST',
+      url: ApiClient.getUrl(path),
+      dataType: 'json',
+      contentType: 'application/json',
+      data: JSON.stringify(data || {})
+    }).then(parseJsonResponse);
   }
 
   function apiDelete(path) {
-    return ApiClient.ajax({ type: 'DELETE', url: ApiClient.getUrl(path) });
+    return ApiClient.ajax({
+      type: 'DELETE',
+      method: 'DELETE',
+      url: ApiClient.getUrl(path)
+    });
   }
 
   function loadStatus() {
@@ -143,24 +177,31 @@
         showDisconnected();
       }
       if (data.punchPlayUrl) el('pp-url-input').value = data.punchPlayUrl;
-    }).catch(showDisconnected);
+    }).catch(function () {
+      showDisconnected();
+      setStatus('Could not load PunchPlay connection status.');
+    });
   }
 
   function startLogin() {
-    el('pp-login-btn').disabled = true;
+    var loginButton = el('pp-login-btn');
+    loginButton.disabled = true;
+    setStatus('Starting PunchPlay login.');
+
     apiPost('PunchPlay/auth/start').then(function (data) {
+      loginButton.disabled = false;
       sessionId = data.sessionId;
       showAuthFlow(data.userCode, data.qrDataUri, data.expiresIn);
       pollTimer = setInterval(poll, 3000);
     }).catch(function () {
-      el('pp-login-btn').disabled = false;
-      Dashboard.alert('Could not reach PunchPlay. Check the URL in Advanced settings.');
+      loginButton.disabled = false;
+      setStatus('Could not reach PunchPlay. Check the URL in Advanced settings.');
     });
   }
 
   function poll() {
     if (!sessionId) return;
-    apiGet('PunchPlay/auth/poll?sessionId=' + sessionId).then(function (data) {
+    apiGet('PunchPlay/auth/poll?sessionId=' + encodeURIComponent(sessionId)).then(function (data) {
       if (data.status === 'complete') {
         stopPoll();
         loadStatus();
@@ -169,9 +210,9 @@
       if (resp && resp.status === 410) {
         stopPoll();
         showDisconnected();
-        Dashboard.alert('The login code expired. Please try again.');
+        setStatus('The login code expired. Please try again.');
       }
-      // 202 = still pending, ignore
+      // 202 = still pending, ignore.
     });
   }
 
@@ -180,6 +221,8 @@
       if (!confirmed) return;
       apiDelete('PunchPlay/auth/disconnect').then(function () {
         showDisconnected();
+      }).catch(function () {
+        setStatus('Could not disconnect PunchPlay.');
       });
     });
   }
@@ -188,17 +231,25 @@
     var url = (el('pp-url-input').value || 'https://punchplay.tv').trim().replace(/\/$/, '');
     var interval = parseInt(el('pp-interval-input').value, 10) || 30;
 
-    ApiClient.getPluginConfiguration(Plugin.uniqueId).then(function (config) {
+    ApiClient.getPluginConfiguration(PLUGIN_ID).then(function (config) {
       config.PunchPlayUrl = url;
       config.ProgressIntervalSeconds = Math.min(300, Math.max(10, interval));
-      ApiClient.updatePluginConfiguration(Plugin.uniqueId, config).then(function () {
+      ApiClient.updatePluginConfiguration(PLUGIN_ID, config).then(function () {
         Dashboard.processPluginConfigurationUpdateResult();
+      }).catch(function () {
+        setStatus('Could not save PunchPlay settings.');
       });
+    }).catch(function () {
+      setStatus('Could not load PunchPlay settings.');
     });
   }
 
   function init() {
-    el('pp-login-btn').addEventListener('click', startLogin);
+    var loginButton = el('pp-login-btn');
+    if (!loginButton || loginButton.getAttribute('data-punchplay-bound') === 'true') return;
+
+    loginButton.setAttribute('data-punchplay-bound', 'true');
+    loginButton.addEventListener('click', startLogin);
     el('pp-disconnect-btn').addEventListener('click', disconnect);
     el('pp-cancel-btn').addEventListener('click', function () { stopPoll(); showDisconnected(); });
     el('pp-save-btn').addEventListener('click', saveAdvanced);
@@ -208,7 +259,7 @@
       page.addEventListener('viewhide', stopPoll);
     }
 
-    ApiClient.getPluginConfiguration(Plugin.uniqueId).then(function (config) {
+    ApiClient.getPluginConfiguration(PLUGIN_ID).then(function (config) {
       if (config.ProgressIntervalSeconds) el('pp-interval-input').value = config.ProgressIntervalSeconds;
     }).catch(function () {});
 
