@@ -8,6 +8,14 @@
     "owner": "PunchPlay",
     "versions": [
       {
+        "version": "1.0.1.0",
+        "changelog": "Fix: Login button now wires up correctly in Jellyfin config page.",
+        "targetAbi": "10.10.0.0",
+        "sourceUrl": "https://github.com/PunchPlay/jellyfin-plugin-punchplay/releases/download/v1.0.1/jellyfin-plugin-punchplay_1.0.1.zip",
+        "checksum": "2a300e71dc8433682fdadd25514fc87c",
+        "timestamp": "2026-05-18T01:00:00Z"
+      },
+      {
         "version": "1.0.0.0",
         "changelog": "Initial release — scrobble playback to PunchPlay with full session tracking (start, pause, resume, stop).",
         "targetAbi": "10.10.0.0",

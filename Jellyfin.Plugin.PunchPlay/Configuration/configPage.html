@@ -197,25 +197,30 @@
     });
   }
 
-  document.addEventListener('viewshow', function () {
-    var page = document.getElementById('PunchPlayConfigPage');
-    if (!page) return;
-
+  function init() {
     el('pp-login-btn').addEventListener('click', startLogin);
     el('pp-disconnect-btn').addEventListener('click', disconnect);
     el('pp-cancel-btn').addEventListener('click', function () { stopPoll(); showDisconnected(); });
     el('pp-save-btn').addEventListener('click', saveAdvanced);
 
+    var page = document.getElementById('PunchPlayConfigPage');
+    if (page) {
+      page.addEventListener('viewhide', stopPoll);
+    }
+
     ApiClient.getPluginConfiguration(Plugin.uniqueId).then(function (config) {
       if (config.ProgressIntervalSeconds) el('pp-interval-input').value = config.ProgressIntervalSeconds;
-    });
+    }).catch(function () {});
 
     loadStatus();
-  });
+  }
 
-  document.addEventListener('viewhide', function () {
-    stopPoll();
-  });
+  // Elements are already in the DOM when this script runs inside a Jellyfin config page.
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
 
 }());
 </script>
