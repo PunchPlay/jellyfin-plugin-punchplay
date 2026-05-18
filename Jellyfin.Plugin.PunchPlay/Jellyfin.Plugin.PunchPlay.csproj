@@ -10,9 +10,9 @@
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
     <AssemblyName>Jellyfin.Plugin.PunchPlay</AssemblyName>
     <RootNamespace>Jellyfin.Plugin.PunchPlay</RootNamespace>
-    <Version>1.0.4.0</Version>
-    <AssemblyVersion>1.0.4.0</AssemblyVersion>
-    <FileVersion>1.0.4.0</FileVersion>
+    <Version>1.0.5.0</Version>
+    <AssemblyVersion>1.0.5.0</AssemblyVersion>
+    <FileVersion>1.0.5.0</FileVersion>
   </PropertyGroup>
 
   <ItemGroup>
