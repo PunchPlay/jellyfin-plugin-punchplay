@@ -8,6 +8,14 @@
     "owner": "PunchPlay",
     "versions": [
       {
+        "version": "1.0.8.0",
+        "changelog": "Fix: Send client_type=jellyfin on device auth so punchplay.tv/link shows Jellyfin branding.",
+        "targetAbi": "10.10.0.0",
+        "sourceUrl": "https://github.com/PunchPlay/jellyfin-plugin-punchplay/releases/download/v1.0.8/jellyfin-plugin-punchplay_1.0.8.zip",
+        "checksum": "b0cd7a52d1c245f47e63fe5d5f2038f3",
+        "timestamp": "2026-05-18T08:00:00Z"
+      },
+      {
         "version": "1.0.7.0",
         "changelog": "Fix: Config page buttons now work reliably.",
         "targetAbi": "10.10.0.0",

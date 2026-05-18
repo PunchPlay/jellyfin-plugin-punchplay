@@ -35,9 +35,10 @@ public class DeviceAuthService
         HttpResponseMessage response;
         try
         {
+            var codeRequest = JsonContent.Create(new { client_type = "jellyfin" });
             response = await client.PostAsync(
                 $"{plugin.ApiBase}/api/auth/device/code",
-                null, ct).ConfigureAwait(false);
+                codeRequest, ct).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
         }
         catch (Exception ex)
