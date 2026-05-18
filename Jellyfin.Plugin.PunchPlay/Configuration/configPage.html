@@ -26,13 +26,13 @@
               </div>
             </div>
             <div style="margin-top:1.5em">
-              <button id="pp-disconnect-btn" is="emby-button" class="raised cancel">Disconnect</button>
+              <button id="pp-disconnect-btn" class="raised cancel emby-button">Disconnect</button>
             </div>
           </div>
 
           <div id="pp-disconnected-view">
             <p style="margin:0 0 1em">Connect your PunchPlay account to automatically scrobble what you watch.</p>
-            <button id="pp-login-btn" is="emby-button" class="raised button-submit">Login with PunchPlay</button>
+            <button id="pp-login-btn" class="raised button-submit emby-button">Login with PunchPlay</button>
           </div>
           <p id="pp-status" class="fieldDescription" style="margin:1em 0 0"></p>
         </div>
@@ -45,7 +45,7 @@
           <div id="pp-user-code" style="font-size:2.5em;font-weight:700;letter-spacing:.2em;color:#00b4d8;margin:.5em 0"></div>
           <img id="pp-qr" src="" alt="QR code" style="width:160px;height:160px;border-radius:8px;margin:.5em auto;display:block" />
           <p style="margin:.5em 0 0;font-size:.8em;color:#777">Waiting for approval... <span id="pp-expires-in"></span></p>
-          <button id="pp-cancel-btn" is="emby-button" class="raised cancel" style="margin-top:1em">Cancel</button>
+          <button id="pp-cancel-btn" class="raised cancel emby-button" style="margin-top:1em">Cancel</button>
         </div>
       </div>
 
@@ -63,7 +63,7 @@
           <div class="fieldDescription">How often to send playback progress updates. Default: 30.</div>
         </div>
         <div>
-          <button id="pp-save-btn" is="emby-button" class="raised button-submit">Save</button>
+          <button id="pp-save-btn" class="raised button-submit emby-button">Save</button>
         </div>
       </div>
 
@@ -232,6 +232,7 @@
     var interval = parseInt(el('pp-interval-input').value, 10) || 30;
 
     ApiClient.getPluginConfiguration(PLUGIN_ID).then(function (config) {
+      config = config || {};
       config.PunchPlayUrl = url;
       config.ProgressIntervalSeconds = Math.min(300, Math.max(10, interval));
       ApiClient.updatePluginConfiguration(PLUGIN_ID, config).then(function () {
