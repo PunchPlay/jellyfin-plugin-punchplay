@@ -21,4 +21,7 @@ public class PluginConfiguration : BasePluginConfiguration
 
     /// <summary>Progress heartbeat interval in seconds. Lower = more frequent API calls.</summary>
     public int ProgressIntervalSeconds { get; set; } = 30;
+
+    /// <summary>Stable device ID sent to PunchPlay to identify this server.</summary>
+    public string ServerId { get; set; } = string.Empty;
 }

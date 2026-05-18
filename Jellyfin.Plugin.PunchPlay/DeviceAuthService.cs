@@ -82,11 +82,27 @@ public class DeviceAuthService
         var plugin = Plugin.Instance;
         if (plugin is null) return PollResult.Expired;
 
+        // Ensure a stable ServerId exists for this server.
+        var serverCfg = plugin.Configuration;
+        if (string.IsNullOrEmpty(serverCfg.ServerId))
+        {
+            serverCfg.ServerId = Guid.NewGuid().ToString("N");
+            plugin.SaveConfiguration(serverCfg);
+        }
+
+        var hostname = System.Net.Dns.GetHostName();
+        var deviceName = $"Jellyfin ({hostname})";
+
         var client = _httpClientFactory.CreateClient("PunchPlay");
         HttpResponseMessage response;
         try
         {
-            var payload = JsonContent.Create(new { device_code = session.DeviceCode, client_type = "jellyfin" });
+            var payload = JsonContent.Create(new {
+                device_code = session.DeviceCode,
+                client_type = "jellyfin",
+                device_id = serverCfg.ServerId,
+                device_name = deviceName
+            });
             response = await client.PostAsync($"{plugin.ApiBase}/api/auth/device/token", payload, ct)
                 .ConfigureAwait(false);
         }
