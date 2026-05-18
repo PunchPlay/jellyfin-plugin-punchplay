@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <NoWarn>1591</NoWarn>
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+    <AssemblyName>Jellyfin.Plugin.PunchPlay</AssemblyName>
+    <RootNamespace>Jellyfin.Plugin.PunchPlay</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Jellyfin SDK — PrivateAssets="All" so the DLL isn't bundled (Jellyfin provides it at runtime) -->
+    <PackageReference Include="Jellyfin.Controller" Version="10.10.7" PrivateAssets="All" />
+  </ItemGroup>
+
+  <!-- Embed the config page HTML so Jellyfin can serve it -->
+  <ItemGroup>
+    <EmbeddedResource Include="Configuration\configPage.html" />
+  </ItemGroup>
+
+</Project>
