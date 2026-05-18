@@ -1,0 +1,20 @@
+[
+  {
+    "category": "General",
+    "guid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "name": "PunchPlay",
+    "overview": "Scrobble playback to PunchPlay",
+    "description": "Automatically track what you watch on PunchPlay. Scrobbles movies and TV episodes with full session tracking — start, pause, resume, and completion. Reads TMDB IDs directly from your Jellyfin library for reliable matching.",
+    "owner": "PunchPlay",
+    "versions": [
+      {
+        "version": "1.0.0.0",
+        "changelog": "Initial release — scrobble playback to PunchPlay with full session tracking (start, pause, resume, stop).",
+        "targetAbi": "10.10.0.0",
+        "sourceUrl": "https://github.com/PunchPlay/jellyfin-plugin-punchplay/releases/download/v1.0.0/jellyfin-plugin-punchplay_1.0.0.zip",
+        "checksum": "7d3ba32315253612812476eace5fae2b",
+        "timestamp": "2026-05-18T00:00:00Z"
+      }
+    ]
+  }
+]
