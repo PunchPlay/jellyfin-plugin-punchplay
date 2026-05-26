@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>PunchPlay</title>
+</head>
+<body>
+<div id="PunchPlayConfigPage" data-role="page" class="page type-interior pluginConfigurationPage"
+     data-require="emby-input,emby-button,emby-select">
+  <div data-role="content">
+    <div class="content-primary">
+
+      <div class="sectionTitleContainer flex align-items-center">
+        <h2 class="sectionTitle">PunchPlay</h2>
+      </div>
+
+      <!-- Status card -->
+      <div class="verticalSection">
+        <div id="pp-status-card" class="paperList" style="padding:1.5em;border-radius:8px;background:rgba(255,255,255,0.05)">
+          <div id="pp-connected-view" style="display:none">
+            <div style="display:flex;align-items:center;gap:1em">
+              <span style="font-size:2em">&#10003;</span>
+              <div>
+                <div style="font-weight:600;font-size:1.1em" id="pp-username-label">Connected</div>
+                <div style="color:#aaa;font-size:.9em" id="pp-connected-date"></div>
+              </div>
+            </div>
+            <div style="margin-top:1.5em">
+              <button id="pp-disconnect-btn" is="emby-button" type="button" class="raised cancel">Disconnect</button>
+            </div>
+          </div>
+
+          <div id="pp-disconnected-view">
+            <p style="margin:0 0 1em">Connect your PunchPlay account to automatically scrobble what you watch.</p>
+            <button id="pp-login-btn" is="emby-button" type="button" class="raised button-submit">Login with PunchPlay</button>
+          </div>
+          <p id="pp-status" class="fieldDescription" style="margin:1em 0 0"></p>
+        </div>
+      </div>
+
+      <!-- Auth flow (hidden until login clicked) -->
+      <div id="pp-auth-flow" class="verticalSection" style="display:none">
+        <div class="paperList" style="padding:1.5em;border-radius:8px;text-align:center">
+          <p style="margin:0 0 .5em;font-size:.9em;color:#aaa">Visit <strong>punchplay.tv/link</strong> and enter this code:</p>
+          <div id="pp-user-code" style="font-size:2.5em;font-weight:700;letter-spacing:.2em;color:#00b4d8;margin:.5em 0"></div>
+          <img id="pp-qr" src="" alt="QR code" style="width:160px;height:160px;border-radius:8px;margin:.5em auto;display:block" />
+          <p style="margin:.5em 0 0;font-size:.8em;color:#777">Waiting for approval... <span id="pp-expires-in"></span></p>
+          <button id="pp-cancel-btn" is="emby-button" type="button" class="raised cancel" style="margin-top:1em">Cancel</button>
+        </div>
+      </div>
+
+      <!-- Advanced settings -->
+      <div class="verticalSection">
+        <h3 class="sectionTitle">Advanced</h3>
+        <div class="inputContainer">
+          <label class="inputLabel inputLabelUnfocused" for="pp-url-input">PunchPlay URL</label>
+          <input id="pp-url-input" is="emby-input" type="url" value="https://punchplay.tv" />
+          <div class="fieldDescription">Only change this if you are self-hosting PunchPlay.</div>
+        </div>
+        <div class="inputContainer">
+          <label class="inputLabel inputLabelUnfocused" for="pp-interval-input">Progress interval (seconds)</label>
+          <input id="pp-interval-input" is="emby-input" type="number" min="5" max="300" value="15" />
+          <div class="fieldDescription">How often to send playback progress updates. Default: 15.</div>
+        </div>
+        <div>
+          <button id="pp-save-btn" is="emby-button" type="button" class="raised button-submit">Save</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script type="text/javascript">
+    (function () {
+      'use strict';
+
+      var PLUGIN_ID = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+      var pollTimer = null;
+      var sessionId = null;
+      var expiresAt = null;
+
+      function el(id) { return document.getElementById(id); }
+
+      function setStatus(msg) {
+        var s = el('pp-status');
+        if (s) s.textContent = msg || '';
+      }
+
+      function parseJsonResponse(response) {
+        if (typeof response === 'string' && response.length) {
+          return JSON.parse(response);
+        }
+        return response || {};
+      }
+
+      function formatDate(iso) {
+        if (!iso) return '';
+        return 'Connected ' + new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+      }
+
+      function stopPoll() {
+        if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+        sessionId = null;
+        expiresAt = null;
+      }
+
+      function showConnected(username, connectedAt) {
+        el('pp-disconnected-view').style.display = 'none';
+        el('pp-connected-view').style.display = '';
+        el('pp-auth-flow').style.display = 'none';
+        el('pp-username-label').textContent = username || 'Connected';
+        el('pp-connected-date').textContent = formatDate(connectedAt);
+        setStatus('Connected to PunchPlay.');
+        stopPoll();
+      }
+
+      function showDisconnected() {
+        el('pp-disconnected-view').style.display = '';
+        el('pp-connected-view').style.display = 'none';
+        el('pp-auth-flow').style.display = 'none';
+        setStatus('Not connected.');
+        stopPoll();
+      }
+
+      function tickExpiry() {
+        if (!expiresAt) return;
+        var remaining = Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000));
+        el('pp-expires-in').textContent = remaining > 0 ? '(' + remaining + 's remaining)' : '(expired)';
+        if (remaining > 0) setTimeout(tickExpiry, 1000);
+      }
+
+      function showAuthFlow(code, qr, expiresSec) {
+        el('pp-disconnected-view').style.display = 'none';
+        el('pp-connected-view').style.display = 'none';
+        el('pp-auth-flow').style.display = '';
+        el('pp-user-code').textContent = code;
+        el('pp-qr').src = qr;
+        expiresAt = Date.now() + expiresSec * 1000;
+        setStatus('Waiting for approval in PunchPlay.');
+        tickExpiry();
+      }
+
+      function apiGet(path) {
+        return ApiClient.ajax({
+          type: 'GET',
+          url: ApiClient.getUrl(path),
+          dataType: 'json'
+        }).then(parseJsonResponse);
+      }
+
+      function apiPost(path, data) {
+        return ApiClient.ajax({
+          type: 'POST',
+          url: ApiClient.getUrl(path),
+          dataType: 'json',
+          contentType: 'application/json',
+          data: JSON.stringify(data || {})
+        }).then(parseJsonResponse);
+      }
+
+      function apiDelete(path) {
+        return ApiClient.ajax({
+          type: 'DELETE',
+          url: ApiClient.getUrl(path)
+        });
+      }
+
+      function loadStatus() {
+        apiGet('PunchPlay/status').then(function (data) {
+          if (data.connected) {
+            showConnected(data.username, data.connectedAt);
+          } else {
+            showDisconnected();
+          }
+          if (data.punchPlayUrl) el('pp-url-input').value = data.punchPlayUrl;
+        }).catch(function () {
+          showDisconnected();
+          setStatus('Could not load PunchPlay connection status.');
+        });
+      }
+
+      function poll() {
+        if (!sessionId) return;
+        apiGet('PunchPlay/auth/poll?sessionId=' + encodeURIComponent(sessionId)).then(function (data) {
+          if (data.status === 'complete') {
+            stopPoll();
+            loadStatus();
+          }
+        }).catch(function (resp) {
+          if (resp && resp.status === 410) {
+            stopPoll();
+            showDisconnected();
+            setStatus('The login code expired. Please try again.');
+          }
+        });
+      }
+
+      function startLogin() {
+        var btn = el('pp-login-btn');
+        btn.disabled = true;
+        setStatus('Starting PunchPlay login...');
+
+        apiPost('PunchPlay/auth/start').then(function (data) {
+          btn.disabled = false;
+          sessionId = data.sessionId;
+          showAuthFlow(data.userCode, data.qrDataUri, data.expiresIn);
+          pollTimer = setInterval(poll, 3000);
+        }).catch(function () {
+          btn.disabled = false;
+          setStatus('Could not reach PunchPlay. Check the URL in Advanced settings.');
+        });
+      }
+
+      function disconnect() {
+        Dashboard.confirm('Disconnect PunchPlay from this Jellyfin server?', 'Disconnect', function (confirmed) {
+          if (!confirmed) return;
+          apiDelete('PunchPlay/auth/disconnect').then(function () {
+            showDisconnected();
+          }).catch(function () {
+            setStatus('Could not disconnect PunchPlay.');
+          });
+        });
+      }
+
+      function saveAdvanced() {
+        var url = (el('pp-url-input').value || 'https://punchplay.tv').trim().replace(/\/$/, '');
+        var interval = parseInt(el('pp-interval-input').value, 10) || 30;
+
+        ApiClient.getPluginConfiguration(PLUGIN_ID).then(function (config) {
+          config = config || {};
+          config.PunchPlayUrl = url;
+          config.ProgressIntervalSeconds = Math.min(300, Math.max(5, interval));
+          ApiClient.updatePluginConfiguration(PLUGIN_ID, config).then(function (result) {
+            Dashboard.processPluginConfigurationUpdateResult(result);
+          }).catch(function () {
+            setStatus('Could not save PunchPlay settings.');
+          });
+        }).catch(function () {
+          setStatus('Could not load PunchPlay settings.');
+        });
+      }
+
+      function bindButtons() {
+        var loginBtn = el('pp-login-btn');
+        if (!loginBtn || loginBtn._ppBound) return;
+        loginBtn._ppBound = true;
+
+        loginBtn.addEventListener('click', startLogin);
+        el('pp-disconnect-btn').addEventListener('click', disconnect);
+        el('pp-cancel-btn').addEventListener('click', function () { stopPoll(); showDisconnected(); });
+        el('pp-save-btn').addEventListener('click', saveAdvanced);
+
+        ApiClient.getPluginConfiguration(PLUGIN_ID).then(function (config) {
+          if (config && config.ProgressIntervalSeconds) {
+            el('pp-interval-input').value = config.ProgressIntervalSeconds;
+          }
+        }).catch(function () {});
+
+        loadStatus();
+      }
+
+      var page = document.querySelector('#PunchPlayConfigPage');
+      if (page) {
+        page.addEventListener('pageshow', bindButtons);
+        page.addEventListener('viewshow', bindButtons);
+        page.addEventListener('viewhide', stopPoll);
+      }
+
+      setTimeout(bindButtons, 500);
+
+    }());
+  </script>
+</div>
+</body>
+</html>

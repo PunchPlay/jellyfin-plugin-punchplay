@@ -1,0 +1,108 @@
+[
+  {
+    "category": "General",
+    "guid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "name": "PunchPlay",
+    "overview": "Scrobble playback to PunchPlay",
+    "description": "Automatically track what you watch on PunchPlay. Scrobbles movies and TV episodes with full session tracking — start, pause, resume, and completion. Reads TMDB IDs directly from your Jellyfin library for reliable matching.",
+    "owner": "PunchPlay",
+    "versions": [
+      {
+        "version": "1.0.11.0",
+        "changelog": "Lower default progress interval to 15s (min 5s) for more accurate tracking.",
+        "targetAbi": "10.10.0.0",
+        "sourceUrl": "https://github.com/PunchPlay/jellyfin-plugin-punchplay/releases/download/v1.0.11/jellyfin-plugin-punchplay_1.0.11.zip",
+        "checksum": "eedf9af37f9520f7014c770fb3b813b2",
+        "timestamp": "2026-05-18T11:00:00Z"
+      },
+      {
+        "version": "1.0.10.0",
+        "changelog": "Sync with punchplay.tv revoke: plugin auto-disconnects when token is revoked remotely.",
+        "targetAbi": "10.10.0.0",
+        "sourceUrl": "https://github.com/PunchPlay/jellyfin-plugin-punchplay/releases/download/v1.0.10/jellyfin-plugin-punchplay_1.0.10.zip",
+        "checksum": "4267c5dcd905e94949d5c07fa6f4deea",
+        "timestamp": "2026-05-18T10:00:00Z"
+      },
+      {
+        "version": "1.0.9.0",
+        "changelog": "Show friendly server name (e.g. \"Jellyfin (MacBook-Air.local)\") in PunchPlay settings.",
+        "targetAbi": "10.10.0.0",
+        "sourceUrl": "https://github.com/PunchPlay/jellyfin-plugin-punchplay/releases/download/v1.0.9/jellyfin-plugin-punchplay_1.0.9.zip",
+        "checksum": "7f3e52d15c702318a2ca9e55a8518169",
+        "timestamp": "2026-05-18T09:00:00Z"
+      },
+      {
+        "version": "1.0.8.0",
+        "changelog": "Fix: Send client_type=jellyfin on device auth so punchplay.tv/link shows Jellyfin branding.",
+        "targetAbi": "10.10.0.0",
+        "sourceUrl": "https://github.com/PunchPlay/jellyfin-plugin-punchplay/releases/download/v1.0.8/jellyfin-plugin-punchplay_1.0.8.zip",
+        "checksum": "b0cd7a52d1c245f47e63fe5d5f2038f3",
+        "timestamp": "2026-05-18T08:00:00Z"
+      },
+      {
+        "version": "1.0.7.0",
+        "changelog": "Fix: Config page buttons now work reliably.",
+        "targetAbi": "10.10.0.0",
+        "sourceUrl": "https://github.com/PunchPlay/jellyfin-plugin-punchplay/releases/download/v1.0.7/jellyfin-plugin-punchplay_1.0.7.zip",
+        "checksum": "92656b1924a9921cfbf0cefb0d85c0b6",
+        "timestamp": "2026-05-18T07:00:00Z"
+      },
+      {
+        "version": "1.0.6.0",
+        "changelog": "Diagnostic: add console logging and multiple binding strategies to trace button issue.",
+        "targetAbi": "10.10.0.0",
+        "sourceUrl": "https://github.com/PunchPlay/jellyfin-plugin-punchplay/releases/download/v1.0.6/jellyfin-plugin-punchplay_1.0.6.zip",
+        "checksum": "08c70111ec712e711f9567493359d936",
+        "timestamp": "2026-05-18T06:00:00Z"
+      },
+      {
+        "version": "1.0.5.0",
+        "changelog": "Fix: Config page buttons now respond to clicks (use pageshow lifecycle event per Jellyfin SPA conventions).",
+        "targetAbi": "10.10.0.0",
+        "sourceUrl": "https://github.com/PunchPlay/jellyfin-plugin-punchplay/releases/download/v1.0.5/jellyfin-plugin-punchplay_1.0.5.zip",
+        "checksum": "48605dca76b481ebc2bf146c2427529f",
+        "timestamp": "2026-05-18T05:00:00Z"
+      },
+      {
+        "version": "1.0.4.0",
+        "changelog": "Fix: Config page buttons (Login, Save) now respond to clicks.",
+        "targetAbi": "10.10.0.0",
+        "sourceUrl": "https://github.com/PunchPlay/jellyfin-plugin-punchplay/releases/download/v1.0.4/jellyfin-plugin-punchplay_1.0.4.zip",
+        "checksum": "da5047ceb94a35812d96bd82b52fd86b",
+        "timestamp": "2026-05-18T04:00:00Z"
+      },
+      {
+        "version": "1.0.3.0",
+        "changelog": "Bump to v1.0.3.",
+        "targetAbi": "10.10.0.0",
+        "sourceUrl": "https://github.com/PunchPlay/jellyfin-plugin-punchplay/releases/download/v1.0.3/jellyfin-plugin-punchplay_1.0.3.zip",
+        "checksum": "06495e708075f7472b9962c11d5c25ef",
+        "timestamp": "2026-05-18T03:00:00Z"
+      },
+      {
+        "version": "1.0.2.0",
+        "changelog": "Fix: Embed correct assembly version so Jellyfin replaces old installs on restart.",
+        "targetAbi": "10.10.0.0",
+        "sourceUrl": "https://github.com/PunchPlay/jellyfin-plugin-punchplay/releases/download/v1.0.2/jellyfin-plugin-punchplay_1.0.2.zip",
+        "checksum": "c6ab9552ee931c1a17f0d94ebfa9cad2",
+        "timestamp": "2026-05-18T02:00:00Z"
+      },
+      {
+        "version": "1.0.1.0",
+        "changelog": "Fix: Login button now wires up correctly in Jellyfin config page.",
+        "targetAbi": "10.10.0.0",
+        "sourceUrl": "https://github.com/PunchPlay/jellyfin-plugin-punchplay/releases/download/v1.0.1/jellyfin-plugin-punchplay_1.0.1.zip",
+        "checksum": "2a300e71dc8433682fdadd25514fc87c",
+        "timestamp": "2026-05-18T01:00:00Z"
+      },
+      {
+        "version": "1.0.0.0",
+        "changelog": "Initial release — scrobble playback to PunchPlay with full session tracking (start, pause, resume, stop).",
+        "targetAbi": "10.10.0.0",
+        "sourceUrl": "https://github.com/PunchPlay/jellyfin-plugin-punchplay/releases/download/v1.0.0/jellyfin-plugin-punchplay_1.0.0.zip",
+        "checksum": "7d3ba32315253612812476eace5fae2b",
+        "timestamp": "2026-05-18T00:00:00Z"
+      }
+    ]
+  }
+]
