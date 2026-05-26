@@ -1,4 +1,4 @@
-using Jellyfin.Plugin.PunchPlay;
+using System.Security.Claims;
 using MediaBrowser.Controller.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -7,22 +7,72 @@ using Microsoft.AspNetCore.Mvc;
 namespace Jellyfin.Plugin.PunchPlay;
 
 /// <summary>
-/// REST endpoints used by the plugin config page.
-/// All endpoints require Jellyfin admin authentication.
+/// Admin-only endpoints — server-wide settings. Requires Jellyfin admin.
 /// </summary>
 [ApiController]
 [Route("PunchPlay")]
 [Authorize(Policy = "RequiresElevation")]
 public class PunchPlayController : ControllerBase
 {
+    /// <summary>Returns server-wide settings.</summary>
+    [HttpGet("settings")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public IActionResult GetSettings()
+    {
+        var plugin = Plugin.Instance;
+        if (plugin is null) return StatusCode(500);
+
+        return Ok(new
+        {
+            punchPlayUrl = plugin.Configuration.PunchPlayUrl,
+            progressIntervalSeconds = plugin.Configuration.ProgressIntervalSeconds
+        });
+    }
+
+    /// <summary>Saves server-wide settings.</summary>
+    [HttpPost("settings")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public IActionResult SaveSettings([FromBody] SaveSettingsRequest body)
+    {
+        var plugin = Plugin.Instance;
+        if (plugin is null) return StatusCode(500);
+
+        var cfg = plugin.Configuration;
+        if (!string.IsNullOrWhiteSpace(body.PunchPlayUrl))
+            cfg.PunchPlayUrl = body.PunchPlayUrl.TrimEnd('/');
+        if (body.ProgressIntervalSeconds.HasValue)
+            cfg.ProgressIntervalSeconds = Math.Clamp(body.ProgressIntervalSeconds.Value, 5, 300);
+        plugin.SaveConfiguration(cfg);
+
+        return NoContent();
+    }
+
+    public class SaveSettingsRequest
+    {
+        public string? PunchPlayUrl { get; set; }
+        public int? ProgressIntervalSeconds { get; set; }
+    }
+}
+
+/// <summary>
+/// Per-user endpoints — each Jellyfin user links their own PunchPlay account. No admin required.
+/// </summary>
+[ApiController]
+[Route("PunchPlay/user")]
+[Authorize]
+public class PunchPlayUserController : ControllerBase
+{
     private readonly DeviceAuthService _deviceAuth;
 
-    public PunchPlayController(DeviceAuthService deviceAuth)
+    public PunchPlayUserController(DeviceAuthService deviceAuth)
     {
         _deviceAuth = deviceAuth;
     }
 
-    /// <summary>Returns current connection status.</summary>
+    private string? GetCurrentUserId() =>
+        User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+    /// <summary>Returns the current Jellyfin user's PunchPlay connection status.</summary>
     [HttpGet("status")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public IActionResult Status()
@@ -30,24 +80,29 @@ public class PunchPlayController : ControllerBase
         var plugin = Plugin.Instance;
         if (plugin is null) return StatusCode(500);
 
-        var connected = plugin.AccessToken is not null;
+        var userId = GetCurrentUserId();
+        if (string.IsNullOrEmpty(userId))
+            return StatusCode(401);
+
+        var token = plugin.GetUserTokenRecord(userId);
+        var connected = token is not null && !string.IsNullOrWhiteSpace(token.AccessToken);
+
         return Ok(new
         {
             connected,
-            username = connected ? plugin.Configuration.PunchPlayUsername : null,
-            connectedAt = connected ? plugin.Configuration.ConnectedAt : null,
-            punchPlayUrl = plugin.Configuration.PunchPlayUrl
+            username = connected ? token!.PunchPlayUsername : null,
+            connectedAt = connected ? token!.ConnectedAt : null
         });
     }
 
-    /// <summary>Starts a device auth flow and returns the user code + QR image.</summary>
+    /// <summary>Starts a device auth flow for the current user.</summary>
     [HttpPost("auth/start")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status502BadGateway)]
     public async Task<IActionResult> StartAuth(CancellationToken ct)
     {
         var result = await _deviceAuth.StartAsync(ct).ConfigureAwait(false);
-        if (result is null) return StatusCode(502, new { error = "Could not reach PunchPlay. Check your server URL in plugin settings." });
+        if (result is null) return StatusCode(502, new { error = "Could not reach PunchPlay. Check the URL in plugin settings." });
 
         return Ok(new
         {
@@ -58,14 +113,18 @@ public class PunchPlayController : ControllerBase
         });
     }
 
-    /// <summary>Polls for device auth completion. Returns 202 while pending, 200 on success, 410 if expired.</summary>
+    /// <summary>Polls for device auth completion for the current user. Returns 202 while pending, 200 on success, 410 if expired.</summary>
     [HttpGet("auth/poll")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status202Accepted)]
     [ProducesResponseType(StatusCodes.Status410Gone)]
     public async Task<IActionResult> PollAuth([FromQuery] string sessionId, CancellationToken ct)
     {
-        var result = await _deviceAuth.PollAsync(sessionId, ct).ConfigureAwait(false);
+        var userId = GetCurrentUserId();
+        if (string.IsNullOrEmpty(userId))
+            return StatusCode(401);
+
+        var result = await _deviceAuth.PollAsync(sessionId, userId, ct).ConfigureAwait(false);
 
         return result switch
         {
@@ -75,21 +134,19 @@ public class PunchPlayController : ControllerBase
         };
     }
 
-    /// <summary>Disconnects the current token.</summary>
+    /// <summary>Disconnects the current user's PunchPlay token.</summary>
     [HttpDelete("auth/disconnect")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public IActionResult Disconnect()
     {
         var plugin = Plugin.Instance;
-        if (plugin is not null)
-        {
-            var cfg = plugin.Configuration;
-            cfg.AccessToken = string.Empty;
-            cfg.PunchPlayUsername = string.Empty;
-            cfg.ConnectedAt = null;
-            plugin.SaveConfiguration(cfg);
-        }
+        if (plugin is null) return StatusCode(500);
 
+        var userId = GetCurrentUserId();
+        if (string.IsNullOrEmpty(userId))
+            return StatusCode(401);
+
+        plugin.ClearUserToken(userId);
         return NoContent();
     }
 }

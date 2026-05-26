@@ -48,8 +48,8 @@
         </div>
       </div>
 
-      <!-- Advanced settings -->
-      <div class="verticalSection">
+      <!-- Advanced settings — admin only -->
+      <div id="pp-admin-section" class="verticalSection" style="display:none">
         <h3 class="sectionTitle">Advanced</h3>
         <div class="inputContainer">
           <label class="inputLabel inputLabelUnfocused" for="pp-url-input">PunchPlay URL</label>
@@ -73,7 +73,6 @@
     (function () {
       'use strict';
 
-      var PLUGIN_ID = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
       var pollTimer = null;
       var sessionId = null;
       var expiresAt = null;
@@ -164,26 +163,33 @@
         });
       }
 
-      function loadStatus() {
-        apiGet('PunchPlay/status').then(function (data) {
+      function loadUserStatus() {
+        apiGet('PunchPlay/user/status').then(function (data) {
           if (data.connected) {
             showConnected(data.username, data.connectedAt);
           } else {
             showDisconnected();
           }
-          if (data.punchPlayUrl) el('pp-url-input').value = data.punchPlayUrl;
         }).catch(function () {
           showDisconnected();
           setStatus('Could not load PunchPlay connection status.');
         });
       }
 
+      function loadAdminSettings() {
+        apiGet('PunchPlay/settings').then(function (data) {
+          if (data.punchPlayUrl) el('pp-url-input').value = data.punchPlayUrl;
+          if (data.progressIntervalSeconds) el('pp-interval-input').value = data.progressIntervalSeconds;
+          el('pp-admin-section').style.display = '';
+        }).catch(function () {});
+      }
+
       function poll() {
         if (!sessionId) return;
-        apiGet('PunchPlay/auth/poll?sessionId=' + encodeURIComponent(sessionId)).then(function (data) {
+        apiGet('PunchPlay/user/auth/poll?sessionId=' + encodeURIComponent(sessionId)).then(function (data) {
           if (data.status === 'complete') {
             stopPoll();
-            loadStatus();
+            loadUserStatus();
           }
         }).catch(function (resp) {
           if (resp && resp.status === 410) {
@@ -199,7 +205,7 @@
         btn.disabled = true;
         setStatus('Starting PunchPlay login...');
 
-        apiPost('PunchPlay/auth/start').then(function (data) {
+        apiPost('PunchPlay/user/auth/start').then(function (data) {
           btn.disabled = false;
           sessionId = data.sessionId;
           showAuthFlow(data.userCode, data.qrDataUri, data.expiresIn);
@@ -211,9 +217,9 @@
       }
 
       function disconnect() {
-        Dashboard.confirm('Disconnect PunchPlay from this Jellyfin server?', 'Disconnect', function (confirmed) {
+        Dashboard.confirm('Disconnect your PunchPlay account from this Jellyfin profile?', 'Disconnect', function (confirmed) {
           if (!confirmed) return;
-          apiDelete('PunchPlay/auth/disconnect').then(function () {
+          apiDelete('PunchPlay/user/auth/disconnect').then(function () {
             showDisconnected();
           }).catch(function () {
             setStatus('Could not disconnect PunchPlay.');
@@ -223,19 +229,16 @@
 
       function saveAdvanced() {
         var url = (el('pp-url-input').value || 'https://punchplay.tv').trim().replace(/\/$/, '');
-        var interval = parseInt(el('pp-interval-input').value, 10) || 30;
+        var interval = parseInt(el('pp-interval-input').value, 10) || 15;
+        var body = {
+          punchPlayUrl: url,
+          progressIntervalSeconds: Math.min(300, Math.max(5, interval))
+        };
 
-        ApiClient.getPluginConfiguration(PLUGIN_ID).then(function (config) {
-          config = config || {};
-          config.PunchPlayUrl = url;
-          config.ProgressIntervalSeconds = Math.min(300, Math.max(5, interval));
-          ApiClient.updatePluginConfiguration(PLUGIN_ID, config).then(function (result) {
-            Dashboard.processPluginConfigurationUpdateResult(result);
-          }).catch(function () {
-            setStatus('Could not save PunchPlay settings.');
-          });
+        apiPost('PunchPlay/settings', body).then(function () {
+          setStatus('Settings saved.');
         }).catch(function () {
-          setStatus('Could not load PunchPlay settings.');
+          setStatus('Could not save settings.');
         });
       }
 
@@ -249,13 +252,13 @@
         el('pp-cancel-btn').addEventListener('click', function () { stopPoll(); showDisconnected(); });
         el('pp-save-btn').addEventListener('click', saveAdvanced);
 
-        ApiClient.getPluginConfiguration(PLUGIN_ID).then(function (config) {
-          if (config && config.ProgressIntervalSeconds) {
-            el('pp-interval-input').value = config.ProgressIntervalSeconds;
+        ApiClient.getCurrentUser().then(function (user) {
+          if (user && user.Policy && user.Policy.IsAdministrator) {
+            loadAdminSettings();
           }
         }).catch(function () {});
 
-        loadStatus();
+        loadUserStatus();
       }
 
       var page = document.querySelector('#PunchPlayConfigPage');

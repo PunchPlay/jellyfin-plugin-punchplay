@@ -46,11 +46,56 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
         };
     }
 
-    /// <summary>Convenience accessor for the saved token.</summary>
-    public string? AccessToken =>
-        string.IsNullOrWhiteSpace(Configuration.AccessToken) ? null : Configuration.AccessToken;
-
     /// <summary>Base URL without trailing slash.</summary>
     public string ApiBase =>
         Configuration.PunchPlayUrl.TrimEnd('/');
+
+    /// <summary>Returns the access token for the given Jellyfin user ID, or null if not linked.</summary>
+    public string? GetUserToken(string jellyfinUserId)
+    {
+        var token = Configuration.UserTokens
+            .FirstOrDefault(t => string.Equals(t.JellyfinUserId, jellyfinUserId, StringComparison.OrdinalIgnoreCase));
+        return string.IsNullOrWhiteSpace(token?.AccessToken) ? null : token.AccessToken;
+    }
+
+    /// <summary>Stores or replaces the token for a Jellyfin user.</summary>
+    public void SetUserToken(string jellyfinUserId, string accessToken, string punchPlayUsername)
+    {
+        var cfg = Configuration;
+        var existing = cfg.UserTokens
+            .FirstOrDefault(t => string.Equals(t.JellyfinUserId, jellyfinUserId, StringComparison.OrdinalIgnoreCase));
+
+        if (existing is not null)
+        {
+            existing.AccessToken = accessToken;
+            existing.PunchPlayUsername = punchPlayUsername;
+            existing.ConnectedAt = DateTime.UtcNow;
+        }
+        else
+        {
+            cfg.UserTokens.Add(new UserToken
+            {
+                JellyfinUserId = jellyfinUserId,
+                AccessToken = accessToken,
+                PunchPlayUsername = punchPlayUsername,
+                ConnectedAt = DateTime.UtcNow
+            });
+        }
+
+        SaveConfiguration(cfg);
+    }
+
+    /// <summary>Removes the token for a Jellyfin user.</summary>
+    public void ClearUserToken(string jellyfinUserId)
+    {
+        var cfg = Configuration;
+        cfg.UserTokens.RemoveAll(t =>
+            string.Equals(t.JellyfinUserId, jellyfinUserId, StringComparison.OrdinalIgnoreCase));
+        SaveConfiguration(cfg);
+    }
+
+    /// <summary>Returns the stored <see cref="UserToken"/> for a Jellyfin user, or null.</summary>
+    public UserToken? GetUserTokenRecord(string jellyfinUserId) =>
+        Configuration.UserTokens
+            .FirstOrDefault(t => string.Equals(t.JellyfinUserId, jellyfinUserId, StringComparison.OrdinalIgnoreCase));
 }

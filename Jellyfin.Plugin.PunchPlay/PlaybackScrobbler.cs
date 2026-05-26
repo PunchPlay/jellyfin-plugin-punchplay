@@ -88,15 +88,18 @@ public sealed class PlaybackScrobbler : IHostedService, IDisposable
     private async Task SendAsync(PlaybackProgressEventArgs e, string action, bool? playedToCompletion = null)
     {
         var plugin = Plugin.Instance;
-        if (plugin?.AccessToken is null) return;
-        if (e.Item is null) return;
+        if (plugin is null || e.Item is null) return;
+
+        var jellyfinUserId = e.Session.UserId.ToString();
+        var accessToken = plugin.GetUserToken(jellyfinUserId);
+        if (accessToken is null) return;
 
         var payload = BuildPayload(e, action, playedToCompletion);
         if (payload is null) return;
 
         var client = _httpClientFactory.CreateClient("PunchPlay");
         client.DefaultRequestHeaders.Authorization =
-            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", plugin.AccessToken);
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
 
         try
         {
@@ -105,11 +108,8 @@ public sealed class PlaybackScrobbler : IHostedService, IDisposable
 
             if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
             {
-                _logger.LogWarning("[PunchPlay] Token revoked — clearing stored credentials");
-                var cfg = plugin.Configuration;
-                cfg.AccessToken = string.Empty;
-                cfg.ConnectedAt = null;
-                plugin.SaveConfiguration(cfg);
+                _logger.LogWarning("[PunchPlay] Token revoked for user {UserId} — clearing stored credentials", jellyfinUserId);
+                plugin.ClearUserToken(jellyfinUserId);
             }
             else if (!response.IsSuccessStatusCode)
             {

@@ -65,10 +65,9 @@ public class DeviceAuthService
     }
 
     /// <summary>
-    /// Polls PunchPlay for token completion. Returns null while still pending,
-    /// throws <see cref="InvalidOperationException"/> if the session is unknown/expired.
+    /// Polls PunchPlay for token completion. On success, stores the token for <paramref name="jellyfinUserId"/>.
     /// </summary>
-    public async Task<PollResult> PollAsync(string sessionId, CancellationToken ct)
+    public async Task<PollResult> PollAsync(string sessionId, string jellyfinUserId, CancellationToken ct)
     {
         if (!_pending.TryGetValue(sessionId, out var session))
             return PollResult.Expired;
@@ -83,11 +82,11 @@ public class DeviceAuthService
         if (plugin is null) return PollResult.Expired;
 
         // Ensure a stable ServerId exists for this server.
-        var serverCfg = plugin.Configuration;
-        if (string.IsNullOrEmpty(serverCfg.ServerId))
+        var cfg = plugin.Configuration;
+        if (string.IsNullOrEmpty(cfg.ServerId))
         {
-            serverCfg.ServerId = Guid.NewGuid().ToString("N");
-            plugin.SaveConfiguration(serverCfg);
+            cfg.ServerId = Guid.NewGuid().ToString("N");
+            plugin.SaveConfiguration(cfg);
         }
 
         var hostname = System.Net.Dns.GetHostName();
@@ -97,10 +96,11 @@ public class DeviceAuthService
         HttpResponseMessage response;
         try
         {
-            var payload = JsonContent.Create(new {
+            var payload = JsonContent.Create(new
+            {
                 device_code = session.DeviceCode,
                 client_type = "jellyfin",
-                device_id = serverCfg.ServerId,
+                device_id = cfg.ServerId,
                 device_name = deviceName
             });
             response = await client.PostAsync($"{plugin.ApiBase}/api/auth/device/token", payload, ct)
@@ -114,7 +114,6 @@ public class DeviceAuthService
 
         if (!response.IsSuccessStatusCode)
         {
-            // 400 with error=authorization_pending is normal while user hasn't approved yet
             var errBody = await response.Content.ReadFromJsonAsync<ErrorBody>(cancellationToken: ct).ConfigureAwait(false);
             return errBody?.Error switch
             {
@@ -129,11 +128,7 @@ public class DeviceAuthService
 
         _pending.TryRemove(sessionId, out _);
 
-        // Persist token
-        var cfg = plugin.Configuration;
-        cfg.AccessToken = tokenBody.AccessToken;
-        cfg.ConnectedAt = DateTime.UtcNow;
-        plugin.SaveConfiguration(cfg);
+        plugin.SetUserToken(jellyfinUserId, tokenBody.AccessToken, tokenBody.Username ?? string.Empty);
 
         return PollResult.Complete;
     }
@@ -151,6 +146,7 @@ public class DeviceAuthService
     private class TokenResponse
     {
         [JsonPropertyName("access_token")] public string? AccessToken { get; set; }
+        [JsonPropertyName("username")] public string? Username { get; set; }
     }
 
     private class ErrorBody
