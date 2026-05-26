@@ -1,4 +1,3 @@
-using System.Reflection;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Plugins;
 using MediaBrowser.Model.Plugins;
@@ -11,12 +10,16 @@ namespace Jellyfin.Plugin.PunchPlay;
 /// </summary>
 public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
 {
+    private readonly IApplicationPaths _applicationPaths;
+
     public static readonly Guid PluginId = new("a1b2c3d4-e5f6-7890-abcd-ef1234567890");
 
     public Plugin(IApplicationPaths applicationPaths, IXmlSerializer xmlSerializer)
         : base(applicationPaths, xmlSerializer)
     {
+        _applicationPaths = applicationPaths;
         Instance = this;
+        Directory.CreateDirectory(StateDirectoryPath);
     }
 
     /// <inheritdoc />
@@ -49,6 +52,46 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     /// <summary>Base URL without trailing slash.</summary>
     public string ApiBase =>
         Configuration.PunchPlayUrl.TrimEnd('/');
+
+    /// <summary>Stable plugin version reported to PunchPlay.</summary>
+    public string ClientVersion =>
+        GetType().Assembly.GetName().Version?.ToString() ?? "unknown";
+
+    /// <summary>Plugin-owned state directory for queue and other local state.</summary>
+    public string StateDirectoryPath =>
+        Path.Combine(_applicationPaths.PluginConfigurationsPath, "PunchPlay");
+
+    /// <summary>Queue file path used for persisted transient scrobble retries.</summary>
+    public string QueueFilePath =>
+        Path.Combine(StateDirectoryPath, "scrobble-queue.json");
+
+    /// <summary>Returns a friendly server name for device auth and diagnostics.</summary>
+    public string FriendlyServerName
+    {
+        get
+        {
+            try
+            {
+                return $"Jellyfin ({System.Net.Dns.GetHostName()})";
+            }
+            catch
+            {
+                return "Jellyfin";
+            }
+        }
+    }
+
+    /// <summary>Ensures the plugin has a stable PunchPlay server ID and returns it.</summary>
+    public string EnsureServerId()
+    {
+        var cfg = Configuration;
+        if (!string.IsNullOrWhiteSpace(cfg.ServerId))
+            return cfg.ServerId;
+
+        cfg.ServerId = Guid.NewGuid().ToString("N");
+        SaveConfiguration(cfg);
+        return cfg.ServerId;
+    }
 
     /// <summary>Returns the access token for the given Jellyfin user ID, or null if not linked.</summary>
     public string? GetUserToken(string jellyfinUserId)

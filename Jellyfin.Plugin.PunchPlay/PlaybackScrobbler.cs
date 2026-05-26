@@ -1,8 +1,4 @@
 using System.Collections.Concurrent;
-using System.Net.Http.Json;
-using MediaBrowser.Controller.Entities;
-using MediaBrowser.Controller.Entities.Movies;
-using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Hosting;
@@ -16,19 +12,22 @@ namespace Jellyfin.Plugin.PunchPlay;
 public sealed class PlaybackScrobbler : IHostedService, IDisposable
 {
     private readonly ISessionManager _sessionManager;
-    private readonly IHttpClientFactory _httpClientFactory;
+    private readonly ScrobblePayloadFactory _payloadFactory;
+    private readonly PunchPlayScrobbleClient _scrobbleClient;
     private readonly ILogger<PlaybackScrobbler> _logger;
 
-    // userId:progressKey → last progress send time (rate-limit heartbeats)
-    private readonly ConcurrentDictionary<string, DateTimeOffset> _lastProgress = new();
+    private readonly ConcurrentDictionary<string, DateTimeOffset> _lastProgressSentAt = new();
+    private readonly ConcurrentDictionary<string, SessionState> _sessionStates = new();
 
     public PlaybackScrobbler(
         ISessionManager sessionManager,
-        IHttpClientFactory httpClientFactory,
+        ScrobblePayloadFactory payloadFactory,
+        PunchPlayScrobbleClient scrobbleClient,
         ILogger<PlaybackScrobbler> logger)
     {
         _sessionManager = sessionManager;
-        _httpClientFactory = httpClientFactory;
+        _payloadFactory = payloadFactory;
+        _scrobbleClient = scrobbleClient;
         _logger = logger;
     }
 
@@ -51,187 +50,139 @@ public sealed class PlaybackScrobbler : IHostedService, IDisposable
     }
 
     private async void OnPlaybackStart(object? sender, PlaybackProgressEventArgs e)
-        => await SendAsync(e, "start").ConfigureAwait(false);
+    {
+        try
+        {
+            var sessionKey = ScrobblePayloadFactory.BuildSessionKey(e);
+            var state = _sessionStates.GetOrAdd(sessionKey, _ => new SessionState());
+            if (state.StartSent)
+                return;
+
+            state.StartSent = true;
+            state.IsPaused = false;
+            state.LastPausePositionSeconds = null;
+            await SendAsync(e, "start").ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[PunchPlay] Failed to process playback start event");
+        }
+    }
 
     private async void OnPlaybackProgress(object? sender, PlaybackProgressEventArgs e)
     {
-        if (e.IsPaused)
+        try
         {
-            await SendAsync(e, "pause").ConfigureAwait(false);
-            return;
+            var sessionKey = ScrobblePayloadFactory.BuildSessionKey(e);
+            var state = _sessionStates.GetOrAdd(sessionKey, _ => new SessionState());
+
+            if (e.IsPaused)
+            {
+                var pausePositionSeconds = ToSeconds(e.PlaybackPositionTicks);
+                if (state.IsPaused && state.LastPausePositionSeconds == pausePositionSeconds)
+                    return;
+
+                state.IsPaused = true;
+                state.LastPausePositionSeconds = pausePositionSeconds;
+                await SendAsync(e, "pause").ConfigureAwait(false);
+                return;
+            }
+
+            var plugin = Plugin.Instance;
+            if (plugin is null)
+                return;
+
+            var now = DateTimeOffset.UtcNow;
+            if (state.IsPaused)
+            {
+                state.IsPaused = false;
+                state.LastPausePositionSeconds = null;
+                _lastProgressSentAt[sessionKey] = now;
+                await SendAsync(e, "resume").ConfigureAwait(false);
+                return;
+            }
+
+            state.IsPaused = false;
+            state.LastPausePositionSeconds = null;
+
+            var intervalSeconds = Math.Max(10, plugin.Configuration.ProgressIntervalSeconds);
+            if (_lastProgressSentAt.TryGetValue(sessionKey, out var lastSent) &&
+                (now - lastSent).TotalSeconds < intervalSeconds)
+            {
+                return;
+            }
+
+            _lastProgressSentAt[sessionKey] = now;
+            await SendAsync(e, "progress").ConfigureAwait(false);
         }
-
-        // Throttle progress events to the configured interval
-        var plugin = Plugin.Instance;
-        if (plugin is null) return;
-        var intervalSeconds = Math.Max(10, plugin.Configuration.ProgressIntervalSeconds);
-
-        var key = $"{e.Session.UserId}:{BuildProgressKey(e.Item)}";
-        var now = DateTimeOffset.UtcNow;
-        if (_lastProgress.TryGetValue(key, out var last) && (now - last).TotalSeconds < intervalSeconds)
-            return;
-
-        _lastProgress[key] = now;
-        await SendAsync(e, "progress").ConfigureAwait(false);
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[PunchPlay] Failed to process playback progress event");
+        }
     }
 
     private async void OnPlaybackStopped(object? sender, PlaybackStopEventArgs e)
     {
-        var action = "stop";
-        await SendAsync(e, action, e.PlayedToCompletion).ConfigureAwait(false);
-
-        // Clear throttle entry
-        var key = $"{e.Session.UserId}:{BuildProgressKey(e.Item)}";
-        _lastProgress.TryRemove(key, out _);
-    }
-
-    private async Task SendAsync(PlaybackProgressEventArgs e, string action, bool? playedToCompletion = null)
-    {
-        var plugin = Plugin.Instance;
-        if (plugin is null || e.Item is null) return;
-
-        var jellyfinUserId = e.Session.UserId.ToString();
-        var accessToken = plugin.GetUserToken(jellyfinUserId);
-        if (accessToken is null) return;
-
-        var payload = BuildPayload(e, action, playedToCompletion);
-        if (payload is null) return;
-
-        var client = _httpClientFactory.CreateClient("PunchPlay");
-        client.DefaultRequestHeaders.Authorization =
-            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
-
         try
         {
-            var response = await client.PostAsJsonAsync(
-                $"{plugin.ApiBase}/api/scrobble/{action}", payload).ConfigureAwait(false);
-
-            if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
-            {
-                _logger.LogWarning("[PunchPlay] Token revoked for user {UserId} — clearing stored credentials", jellyfinUserId);
-                plugin.ClearUserToken(jellyfinUserId);
-            }
-            else if (!response.IsSuccessStatusCode)
-            {
-                _logger.LogWarning("[PunchPlay] Scrobble {Action} returned {Status}", action, response.StatusCode);
-            }
+            await SendAsync(e, "stop", e.PlayedToCompletion).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "[PunchPlay] Scrobble {Action} failed", action);
+            _logger.LogError(ex, "[PunchPlay] Failed to process playback stop event");
+        }
+        finally
+        {
+            var sessionKey = ScrobblePayloadFactory.BuildSessionKey(e);
+            _lastProgressSentAt.TryRemove(sessionKey, out _);
+            _sessionStates.TryRemove(sessionKey, out _);
         }
     }
 
-    private static ScrobblePayload? BuildPayload(PlaybackProgressEventArgs e, string action, bool? playedToCompletion)
+    private async Task SendAsync(PlaybackProgressEventArgs e, string action, bool playedToCompletion = false)
     {
-        var item = e.Item;
-        var positionTicks = e.PlaybackPositionTicks ?? 0;
-        var positionSeconds = (int)(positionTicks / 10_000_000);
-        var durationSeconds = item.RunTimeTicks.HasValue
-            ? (int)(item.RunTimeTicks.Value / 10_000_000)
+        var plugin = Plugin.Instance;
+        if (plugin is null || e.Item is null)
+            return;
+
+        var jellyfinUserId = e.Session.UserId.ToString();
+        var accessToken = plugin.GetUserToken(jellyfinUserId);
+        if (string.IsNullOrWhiteSpace(accessToken))
+            return;
+
+        var payload = _payloadFactory.Create(
+            e,
+            action,
+            jellyfinUserId,
+            plugin.EnsureServerId(),
+            plugin.FriendlyServerName,
+            plugin.ClientVersion,
+            playedToCompletion);
+        if (payload is null)
+            return;
+
+        await _scrobbleClient.DispatchAsync(action, jellyfinUserId, accessToken, payload, CancellationToken.None)
+            .ConfigureAwait(false);
+    }
+
+    private static int ToSeconds(long? ticks) =>
+        ticks.HasValue && ticks.Value > 0
+            ? (int)(ticks.Value / 10_000_000)
             : 0;
 
-        if (item is Movie movie)
-        {
-            var tmdbId = ParseTmdbId(movie.ProviderIds.GetValueOrDefault("Tmdb"));
-            if (tmdbId is null && string.IsNullOrWhiteSpace(movie.Name)) return null;
-
-            return new ScrobblePayload
-            {
-                MediaType = "movie",
-                Title = movie.Name,
-                Year = movie.ProductionYear,
-                TmdbId = tmdbId,
-                PositionSeconds = positionSeconds,
-                DurationSeconds = durationSeconds > 0 ? durationSeconds : null,
-                Watched = playedToCompletion,
-                WatchedThreshold = playedToCompletion is null ? null : 0.85,
-                DeviceName = e.Session.DeviceName
-            };
-        }
-
-        if (item is Episode episode)
-        {
-            var showTmdbId = ParseTmdbId(episode.Series?.ProviderIds.GetValueOrDefault("Tmdb"))
-                ?? ParseTmdbId(episode.ProviderIds.GetValueOrDefault("Tmdb"));
-            var seasonNumber = episode.ParentIndexNumber;
-            var episodeNumber = episode.IndexNumber;
-            var showName = episode.SeriesName ?? episode.Series?.Name;
-
-            if (showTmdbId is null && string.IsNullOrWhiteSpace(showName)) return null;
-            if (seasonNumber is null || episodeNumber is null) return null;
-
-            return new ScrobblePayload
-            {
-                MediaType = "episode",
-                Title = showName,
-                Year = episode.ProductionYear ?? episode.Series?.ProductionYear,
-                TmdbId = showTmdbId,
-                Season = seasonNumber,
-                Episode = episodeNumber,
-                PositionSeconds = positionSeconds,
-                DurationSeconds = durationSeconds > 0 ? durationSeconds : null,
-                Watched = playedToCompletion,
-                WatchedThreshold = playedToCompletion is null ? null : 0.85,
-                DeviceName = e.Session.DeviceName
-            };
-        }
-
-        return null;
-    }
-
-    private static string BuildProgressKey(BaseItem? item) => item switch
-    {
-        Movie m => $"movie:{m.ProviderIds.GetValueOrDefault("Tmdb") ?? m.Name}",
-        Episode ep => $"episode:{ep.Series?.ProviderIds.GetValueOrDefault("Tmdb") ?? ep.SeriesName}:{ep.ParentIndexNumber}:{ep.IndexNumber}",
-        _ => item?.Id.ToString() ?? "unknown"
-    };
-
-    private static int? ParseTmdbId(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value)) return null;
-        return int.TryParse(value, out var id) && id > 0 ? id : null;
-    }
-
     /// <inheritdoc />
-    public void Dispose() => _lastProgress.Clear();
-
-    private class ScrobblePayload
+    public void Dispose()
     {
-        [System.Text.Json.Serialization.JsonPropertyName("media_type")]
-        public string MediaType { get; set; } = string.Empty;
+        _lastProgressSentAt.Clear();
+        _sessionStates.Clear();
+    }
 
-        [System.Text.Json.Serialization.JsonPropertyName("title")]
-        public string? Title { get; set; }
+    private sealed class SessionState
+    {
+        public bool StartSent { get; set; }
 
-        [System.Text.Json.Serialization.JsonPropertyName("year")]
-        public int? Year { get; set; }
+        public bool IsPaused { get; set; }
 
-        [System.Text.Json.Serialization.JsonPropertyName("tmdb_id")]
-        public int? TmdbId { get; set; }
-
-        [System.Text.Json.Serialization.JsonPropertyName("season")]
-        public int? Season { get; set; }
-
-        [System.Text.Json.Serialization.JsonPropertyName("episode")]
-        public int? Episode { get; set; }
-
-        [System.Text.Json.Serialization.JsonPropertyName("position_seconds")]
-        public int PositionSeconds { get; set; }
-
-        [System.Text.Json.Serialization.JsonPropertyName("duration_seconds")]
-        public int? DurationSeconds { get; set; }
-
-        [System.Text.Json.Serialization.JsonPropertyName("watched")]
-        public bool? Watched { get; set; }
-
-        [System.Text.Json.Serialization.JsonPropertyName("watched_threshold")]
-        public double? WatchedThreshold { get; set; }
-
-        [System.Text.Json.Serialization.JsonPropertyName("client_version")]
-        public string ClientVersion { get; set; } = "1.0.0";
-
-        [System.Text.Json.Serialization.JsonPropertyName("device_id")]
-        public string? DeviceName { get; set; }
+        public int? LastPausePositionSeconds { get; set; }
     }
 }

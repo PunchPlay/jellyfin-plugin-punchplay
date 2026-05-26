@@ -1,5 +1,5 @@
-using System.Security.Claims;
 using MediaBrowser.Controller.Authentication;
+using MediaBrowser.Controller.Net;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -14,6 +14,15 @@ namespace Jellyfin.Plugin.PunchPlay;
 [Authorize(Policy = "RequiresElevation")]
 public class PunchPlayController : ControllerBase
 {
+    private readonly PluginDiagnosticsService _diagnostics;
+    private readonly ScrobbleQueueService _queueService;
+
+    public PunchPlayController(PluginDiagnosticsService diagnostics, ScrobbleQueueService queueService)
+    {
+        _diagnostics = diagnostics;
+        _queueService = queueService;
+    }
+
     /// <summary>Returns server-wide settings.</summary>
     [HttpGet("settings")]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -47,6 +56,48 @@ public class PunchPlayController : ControllerBase
         return NoContent();
     }
 
+    /// <summary>Returns runtime plugin diagnostics for admins.</summary>
+    [HttpGet("settings/status")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public IActionResult GetStatus()
+    {
+        var plugin = Plugin.Instance;
+        if (plugin is null) return StatusCode(500);
+
+        return Ok(new
+        {
+            punchPlayUrl = plugin.Configuration.PunchPlayUrl,
+            pluginVersion = plugin.ClientVersion,
+            serverName = plugin.FriendlyServerName,
+            linkedUserCount = plugin.Configuration.UserTokens.Count,
+            queuedScrobbleCount = _diagnostics.QueuedScrobbleCount,
+            oldestQueuedScrobbleAt = _diagnostics.OldestQueuedScrobbleAtUtc,
+            nextQueuedRetryAt = _diagnostics.NextQueuedRetryAtUtc,
+            highestQueuedRetryCount = _diagnostics.HighestQueuedRetryCount,
+            lastSuccessfulScrobbleAt = _diagnostics.LastSuccessfulScrobbleAtUtc,
+            lastFailedScrobbleAt = _diagnostics.LastFailedScrobbleAtUtc,
+            lastError = _diagnostics.LastError
+        });
+    }
+
+    /// <summary>Retries the local scrobble queue immediately.</summary>
+    [HttpPost("settings/queue/retry")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> RetryQueue(CancellationToken ct)
+    {
+        await _queueService.RetryNowAsync(ct).ConfigureAwait(false);
+        return NoContent();
+    }
+
+    /// <summary>Clears the local scrobble retry queue.</summary>
+    [HttpDelete("settings/queue")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> ClearQueue(CancellationToken ct)
+    {
+        await _queueService.ClearAsync(ct).ConfigureAwait(false);
+        return NoContent();
+    }
+
     public class SaveSettingsRequest
     {
         public string? PunchPlayUrl { get; set; }
@@ -55,7 +106,8 @@ public class PunchPlayController : ControllerBase
 }
 
 /// <summary>
-/// Per-user endpoints — each Jellyfin user links their own PunchPlay account. No admin required.
+/// Per-user endpoints — any authenticated Jellyfin user can link their own PunchPlay account.
+/// Admins may additionally pass a <c>userId</c> query param to manage any user.
 /// </summary>
 [ApiController]
 [Route("PunchPlay/user")]
@@ -63,28 +115,68 @@ public class PunchPlayController : ControllerBase
 public class PunchPlayUserController : ControllerBase
 {
     private readonly DeviceAuthService _deviceAuth;
+    private readonly IAuthorizationContext _authContext;
+    private readonly IAuthorizationService _authorizationService;
+    private readonly ScrobbleQueueService _queueService;
 
-    public PunchPlayUserController(DeviceAuthService deviceAuth)
+    public PunchPlayUserController(
+        DeviceAuthService deviceAuth,
+        IAuthorizationContext authContext,
+        IAuthorizationService authorizationService,
+        ScrobbleQueueService queueService)
     {
         _deviceAuth = deviceAuth;
+        _authContext = authContext;
+        _authorizationService = authorizationService;
+        _queueService = queueService;
     }
 
-    private string? GetCurrentUserId() =>
-        User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+    /// <summary>
+    /// Returns the effective target user ID.
+    /// Admins may pass a different <paramref name="requestedUserId"/>; non-admins always get their own ID.
+    /// </summary>
+    private async Task<string?> GetTargetUserIdAsync(Guid? requestedUserId)
+    {
+        var currentContext = await GetCurrentAccessContextAsync().ConfigureAwait(false);
+        if (currentContext is null) return null;
 
-    /// <summary>Returns the current Jellyfin user's PunchPlay connection status.</summary>
+        var currentId = currentContext.UserId;
+
+        // If no specific user requested, or same user — return current
+        if (!requestedUserId.HasValue || requestedUserId.Value == Guid.Empty || requestedUserId.Value == currentId)
+            return currentId.ToString();
+
+        // Different user requested — only admins allowed
+        if (currentContext.IsAdmin)
+            return requestedUserId.Value.ToString();
+
+        // Non-admin requesting another user — silently use their own ID
+        return currentId.ToString();
+    }
+
+    private async Task<CurrentAccessContext?> GetCurrentAccessContextAsync()
+    {
+        var auth = await _authContext.GetAuthorizationInfo(Request).ConfigureAwait(false);
+        if (auth is null || auth.UserId == Guid.Empty)
+            return null;
+
+        var authResult = await _authorizationService.AuthorizeAsync(User, null, "RequiresElevation").ConfigureAwait(false);
+        var isAdmin = authResult.Succeeded;
+        return new CurrentAccessContext(auth.UserId, isAdmin);
+    }
+
+    /// <summary>Returns a Jellyfin user's PunchPlay connection status.</summary>
     [HttpGet("status")]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public IActionResult Status()
+    public async Task<IActionResult> Status([FromQuery] Guid? userId = null)
     {
         var plugin = Plugin.Instance;
         if (plugin is null) return StatusCode(500);
 
-        var userId = GetCurrentUserId();
-        if (string.IsNullOrEmpty(userId))
-            return StatusCode(401);
+        var targetId = await GetTargetUserIdAsync(userId).ConfigureAwait(false);
+        if (string.IsNullOrEmpty(targetId)) return StatusCode(401);
 
-        var token = plugin.GetUserTokenRecord(userId);
+        var token = plugin.GetUserTokenRecord(targetId);
         var connected = token is not null && !string.IsNullOrWhiteSpace(token.AccessToken);
 
         return Ok(new
@@ -95,13 +187,16 @@ public class PunchPlayUserController : ControllerBase
         });
     }
 
-    /// <summary>Starts a device auth flow for the current user.</summary>
+    /// <summary>Starts a device auth flow.</summary>
     [HttpPost("auth/start")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status502BadGateway)]
-    public async Task<IActionResult> StartAuth(CancellationToken ct)
+    public async Task<IActionResult> StartAuth([FromQuery] Guid? userId = null, CancellationToken ct = default)
     {
-        var result = await _deviceAuth.StartAsync(ct).ConfigureAwait(false);
+        var targetId = await GetTargetUserIdAsync(userId).ConfigureAwait(false);
+        if (string.IsNullOrEmpty(targetId)) return StatusCode(401);
+
+        var result = await _deviceAuth.StartAsync(targetId, ct).ConfigureAwait(false);
         if (result is null) return StatusCode(502, new { error = "Could not reach PunchPlay. Check the URL in plugin settings." });
 
         return Ok(new
@@ -113,18 +208,26 @@ public class PunchPlayUserController : ControllerBase
         });
     }
 
-    /// <summary>Polls for device auth completion for the current user. Returns 202 while pending, 200 on success, 410 if expired.</summary>
+    /// <summary>Polls for device auth completion. Returns 202 while pending, 200 on success, 410 if expired.</summary>
     [HttpGet("auth/poll")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status202Accepted)]
     [ProducesResponseType(StatusCodes.Status410Gone)]
-    public async Task<IActionResult> PollAuth([FromQuery] string sessionId, CancellationToken ct)
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> PollAuth([FromQuery] string sessionId, CancellationToken ct = default)
     {
-        var userId = GetCurrentUserId();
-        if (string.IsNullOrEmpty(userId))
-            return StatusCode(401);
+        var currentContext = await GetCurrentAccessContextAsync().ConfigureAwait(false);
+        if (currentContext is null) return StatusCode(401);
 
-        var result = await _deviceAuth.PollAsync(sessionId, userId, ct).ConfigureAwait(false);
+        var boundUserId = _deviceAuth.GetBoundUserId(sessionId);
+        if (!string.IsNullOrWhiteSpace(boundUserId)
+            && !currentContext.IsAdmin
+            && !string.Equals(boundUserId, currentContext.UserId.ToString(), StringComparison.OrdinalIgnoreCase))
+        {
+            return Forbid();
+        }
+
+        var result = await _deviceAuth.PollAsync(sessionId, ct).ConfigureAwait(false);
 
         return result switch
         {
@@ -134,19 +237,21 @@ public class PunchPlayUserController : ControllerBase
         };
     }
 
-    /// <summary>Disconnects the current user's PunchPlay token.</summary>
+    /// <summary>Disconnects a user's PunchPlay token.</summary>
     [HttpDelete("auth/disconnect")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    public IActionResult Disconnect()
+    public async Task<IActionResult> Disconnect([FromQuery] Guid? userId = null, CancellationToken ct = default)
     {
         var plugin = Plugin.Instance;
         if (plugin is null) return StatusCode(500);
 
-        var userId = GetCurrentUserId();
-        if (string.IsNullOrEmpty(userId))
-            return StatusCode(401);
+        var targetId = await GetTargetUserIdAsync(userId).ConfigureAwait(false);
+        if (string.IsNullOrEmpty(targetId)) return StatusCode(401);
 
-        plugin.ClearUserToken(userId);
+        plugin.ClearUserToken(targetId);
+        await _queueService.ClearUserAsync(targetId, ct).ConfigureAwait(false);
         return NoContent();
     }
+
+    private sealed record CurrentAccessContext(Guid UserId, bool IsAdmin);
 }

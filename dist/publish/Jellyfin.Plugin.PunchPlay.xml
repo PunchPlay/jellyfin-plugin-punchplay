@@ -123,20 +123,27 @@
         </member>
         <member name="T:Jellyfin.Plugin.PunchPlay.PunchPlayUserController">
             <summary>
-            Per-user endpoints — each Jellyfin user links their own PunchPlay account. No admin required.
+            Per-user endpoints — any authenticated Jellyfin user can link their own PunchPlay account.
+            Admins may additionally pass a <c>userId</c> query param to manage any user.
             </summary>
         </member>
-        <member name="M:Jellyfin.Plugin.PunchPlay.PunchPlayUserController.Status">
-            <summary>Returns the current Jellyfin user's PunchPlay connection status.</summary>
+        <member name="M:Jellyfin.Plugin.PunchPlay.PunchPlayUserController.GetTargetUserIdAsync(System.Nullable{System.Guid})">
+            <summary>
+            Returns the effective target user ID.
+            Admins may pass a different <paramref name="requestedUserId"/>; non-admins always get their own ID.
+            </summary>
+        </member>
+        <member name="M:Jellyfin.Plugin.PunchPlay.PunchPlayUserController.Status(System.Nullable{System.Guid})">
+            <summary>Returns a Jellyfin user's PunchPlay connection status.</summary>
         </member>
         <member name="M:Jellyfin.Plugin.PunchPlay.PunchPlayUserController.StartAuth(System.Threading.CancellationToken)">
-            <summary>Starts a device auth flow for the current user.</summary>
+            <summary>Starts a device auth flow.</summary>
         </member>
-        <member name="M:Jellyfin.Plugin.PunchPlay.PunchPlayUserController.PollAuth(System.String,System.Threading.CancellationToken)">
-            <summary>Polls for device auth completion for the current user. Returns 202 while pending, 200 on success, 410 if expired.</summary>
+        <member name="M:Jellyfin.Plugin.PunchPlay.PunchPlayUserController.PollAuth(System.String,System.Nullable{System.Guid},System.Threading.CancellationToken)">
+            <summary>Polls for device auth completion. Returns 202 while pending, 200 on success, 410 if expired.</summary>
         </member>
-        <member name="M:Jellyfin.Plugin.PunchPlay.PunchPlayUserController.Disconnect">
-            <summary>Disconnects the current user's PunchPlay token.</summary>
+        <member name="M:Jellyfin.Plugin.PunchPlay.PunchPlayUserController.Disconnect(System.Nullable{System.Guid})">
+            <summary>Disconnects a user's PunchPlay token.</summary>
         </member>
     </members>
 </doc>

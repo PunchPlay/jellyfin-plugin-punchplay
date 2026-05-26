@@ -8,6 +8,54 @@
     "owner": "PunchPlay",
     "versions": [
       {
+        "version": "2.0.6.0",
+        "changelog": "Hardening pass: live scrobbles now signal background queue replay instead of waiting on it, manual queue retry force-retries queued entries immediately, and queue/auth regression coverage has been expanded.",
+        "targetAbi": "10.10.0.0",
+        "sourceUrl": "https://raw.githubusercontent.com/PunchPlay/jellyfin-plugin-punchplay/main/release-assets/jellyfin-plugin-punchplay_2.0.6.zip",
+        "checksum": "ababdd8eaa45b1f7764baeed173029da",
+        "timestamp": "2026-05-25T20:27:33Z"
+      },
+      {
+        "version": "2.0.5.0",
+        "changelog": "Hotfix: replace the Jellyfin user/admin access checks with policy-based authorization to avoid runtime ABI mismatches on Jellyfin 10.10.",
+        "targetAbi": "10.10.0.0",
+        "sourceUrl": "https://raw.githubusercontent.com/PunchPlay/jellyfin-plugin-punchplay/main/release-assets/jellyfin-plugin-punchplay_2.0.5.zip",
+        "checksum": "4937ff2fc32a430d067a8d52ada16618",
+        "timestamp": "2026-05-25T15:08:37Z"
+      },
+      {
+        "version": "2.0.4.0",
+        "changelog": "Hotfix: remove the Jellyfin user lookup ABI mismatch that broke PunchPlay login on 10.10, and show a clearer plugin-side error when auth start fails.",
+        "targetAbi": "10.10.0.0",
+        "sourceUrl": "https://raw.githubusercontent.com/PunchPlay/jellyfin-plugin-punchplay/main/release-assets/jellyfin-plugin-punchplay_2.0.4.zip",
+        "checksum": "552d47001e7a7b12455847bab5e54c49",
+        "timestamp": "2026-05-25T14:50:58Z"
+      },
+      {
+        "version": "2.0.3.0",
+        "changelog": "Hardening pass: automatic queued retry, queue cleanup on disconnect/401, stricter auth polling, improved session dedupe, CI build/test, and new automated tests.",
+        "targetAbi": "10.10.0.0",
+        "sourceUrl": "https://raw.githubusercontent.com/PunchPlay/jellyfin-plugin-punchplay/main/release-assets/jellyfin-plugin-punchplay_2.0.3.zip",
+        "checksum": "df89070a6fcd9cdc635686af503c79a9",
+        "timestamp": "2026-05-25T14:32:38Z"
+      },
+      {
+        "version": "2.0.2.0",
+        "changelog": "User dropdown: admins see all Jellyfin users and can link each one; non-admins self-serve their own account.",
+        "targetAbi": "10.10.0.0",
+        "sourceUrl": "https://github.com/PunchPlay/jellyfin-plugin-punchplay/releases/download/v2.0.2/jellyfin-plugin-punchplay_2.0.2.zip",
+        "checksum": "74e6eafe14002825f62a8efa4406f443",
+        "timestamp": "2026-05-18T14:00:00Z"
+      },
+      {
+        "version": "2.0.1.0",
+        "changelog": "Fix: per-user auth endpoints now correctly resolve the Jellyfin user ID using IAuthorizationContext.",
+        "targetAbi": "10.10.0.0",
+        "sourceUrl": "https://github.com/PunchPlay/jellyfin-plugin-punchplay/releases/download/v2.0.1/jellyfin-plugin-punchplay_2.0.1.zip",
+        "checksum": "3121597c43e0f2229f9863b14d535bdb",
+        "timestamp": "2026-05-18T13:00:00Z"
+      },
+      {
         "version": "2.0.0.0",
         "changelog": "Multi-user support: each Jellyfin user links their own PunchPlay account; scrobbles are routed per-user.",
         "targetAbi": "10.10.0.0",

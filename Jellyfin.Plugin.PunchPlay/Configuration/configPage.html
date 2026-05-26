@@ -13,15 +13,29 @@
         <h2 class="sectionTitle">PunchPlay</h2>
       </div>
 
-      <!-- Status card -->
       <div class="verticalSection">
-        <div id="pp-status-card" class="paperList" style="padding:1.5em;border-radius:8px;background:rgba(255,255,255,0.05)">
+        <p class="fieldDescription" id="pp-account-note">
+          Link this Jellyfin user to a PunchPlay account. Server settings are admin-only.
+        </p>
+      </div>
+
+      <div class="verticalSection" id="pp-user-section" style="display:none">
+        <div class="inputContainer">
+          <label class="inputLabel inputLabelUnfocused" for="pp-user-selector">Jellyfin user</label>
+          <select id="pp-user-selector" is="emby-select"></select>
+          <div class="fieldDescription">Admins can manage the PunchPlay link for any Jellyfin user on this server.</div>
+        </div>
+      </div>
+
+      <div class="verticalSection">
+        <div class="paperList" style="padding:1.5em;border-radius:8px;background:rgba(255,255,255,0.05)">
           <div id="pp-connected-view" style="display:none">
             <div style="display:flex;align-items:center;gap:1em">
               <span style="font-size:2em">&#10003;</span>
               <div>
                 <div style="font-weight:600;font-size:1.1em" id="pp-username-label">Connected</div>
                 <div style="color:#aaa;font-size:.9em" id="pp-connected-date"></div>
+                <div style="color:#aaa;font-size:.9em" id="pp-linked-user-label"></div>
               </div>
             </div>
             <div style="margin-top:1.5em">
@@ -30,14 +44,13 @@
           </div>
 
           <div id="pp-disconnected-view">
-            <p style="margin:0 0 1em">Connect your PunchPlay account to automatically scrobble what you watch.</p>
-            <button id="pp-login-btn" is="emby-button" type="button" class="raised button-submit">Login with PunchPlay</button>
+            <p style="margin:0 0 1em">Connect this Jellyfin user to PunchPlay to automatically scrobble what they watch.</p>
+            <button id="pp-login-btn" is="emby-button" type="button" class="raised button-submit">Connect to PunchPlay</button>
           </div>
           <p id="pp-status" class="fieldDescription" style="margin:1em 0 0"></p>
         </div>
       </div>
 
-      <!-- Auth flow (hidden until login clicked) -->
       <div id="pp-auth-flow" class="verticalSection" style="display:none">
         <div class="paperList" style="padding:1.5em;border-radius:8px;text-align:center">
           <p style="margin:0 0 .5em;font-size:.9em;color:#aaa">Visit <strong>punchplay.tv/link</strong> and enter this code:</p>
@@ -48,9 +61,9 @@
         </div>
       </div>
 
-      <!-- Advanced settings — admin only -->
       <div id="pp-admin-section" class="verticalSection" style="display:none">
         <h3 class="sectionTitle">Advanced</h3>
+        <div class="fieldDescription" style="margin-bottom:1em">Server settings are admin-only.</div>
         <div class="inputContainer">
           <label class="inputLabel inputLabelUnfocused" for="pp-url-input">PunchPlay URL</label>
           <input id="pp-url-input" is="emby-input" type="url" value="https://punchplay.tv" />
@@ -66,6 +79,19 @@
         </div>
       </div>
 
+      <div id="pp-admin-diagnostics" class="verticalSection" style="display:none">
+        <h3 class="sectionTitle">Server Diagnostics</h3>
+        <div class="paperList" style="padding:1.5em;border-radius:8px;background:rgba(255,255,255,0.03)">
+          <div class="fieldDescription" id="pp-diagnostics-summary">Loading plugin status...</div>
+          <div class="fieldDescription" id="pp-diagnostics-error" style="margin-top:.75em"></div>
+          <div style="margin-top:1em;display:flex;gap:.75em;flex-wrap:wrap">
+            <button id="pp-retry-queue-btn" is="emby-button" type="button" class="raised">Retry Queue Now</button>
+            <button id="pp-clear-queue-btn" is="emby-button" type="button" class="raised cancel">Clear Queue</button>
+          </div>
+          <div class="fieldDescription" style="margin-top:.75em">Attempts all queued scrobbles immediately.</div>
+        </div>
+      </div>
+
     </div>
   </div>
 
@@ -76,6 +102,10 @@
       var pollTimer = null;
       var sessionId = null;
       var expiresAt = null;
+      var selectedUserId = null;
+      var selectedUserName = 'Current user';
+      var currentUser = null;
+      var isAdmin = false;
 
       function el(id) { return document.getElementById(id); }
 
@@ -91,9 +121,28 @@
         return response || {};
       }
 
+      function extractErrorMessage(resp, fallback) {
+        if (resp) {
+          if (resp.responseJSON && resp.responseJSON.error) return resp.responseJSON.error;
+          if (resp.responseText) {
+            try {
+              var parsed = JSON.parse(resp.responseText);
+              if (parsed && parsed.error) return parsed.error;
+            } catch (e) { }
+          }
+          if (resp.status >= 500) return 'PunchPlay plugin error. Check the Jellyfin server logs.';
+        }
+        return fallback;
+      }
+
       function formatDate(iso) {
         if (!iso) return '';
         return 'Connected ' + new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+      }
+
+      function formatDateTime(iso) {
+        if (!iso) return 'Never';
+        return new Date(iso).toLocaleString();
       }
 
       function stopPoll() {
@@ -106,9 +155,10 @@
         el('pp-disconnected-view').style.display = 'none';
         el('pp-connected-view').style.display = '';
         el('pp-auth-flow').style.display = 'none';
-        el('pp-username-label').textContent = username || 'Connected';
+        el('pp-username-label').textContent = username ? 'Connected as ' + username : 'Connected';
         el('pp-connected-date').textContent = formatDate(connectedAt);
-        setStatus('Connected to PunchPlay.');
+        el('pp-linked-user-label').textContent = 'This Jellyfin user is linked to this PunchPlay account.';
+        setStatus('PunchPlay is connected for ' + selectedUserName + '.');
         stopPoll();
       }
 
@@ -116,7 +166,8 @@
         el('pp-disconnected-view').style.display = '';
         el('pp-connected-view').style.display = 'none';
         el('pp-auth-flow').style.display = 'none';
-        setStatus('Not connected.');
+        el('pp-linked-user-label').textContent = '';
+        setStatus('PunchPlay is not connected for ' + selectedUserName + '.');
         stopPoll();
       }
 
@@ -134,8 +185,12 @@
         el('pp-user-code').textContent = code;
         el('pp-qr').src = qr;
         expiresAt = Date.now() + expiresSec * 1000;
-        setStatus('Waiting for approval in PunchPlay.');
+        setStatus('Waiting for approval in PunchPlay for ' + selectedUserName + '.');
         tickExpiry();
+      }
+
+      function userIdParam() {
+        return selectedUserId ? '?userId=' + encodeURIComponent(selectedUserId) : '';
       }
 
       function apiGet(path) {
@@ -164,7 +219,7 @@
       }
 
       function loadUserStatus() {
-        apiGet('PunchPlay/user/status').then(function (data) {
+        apiGet('PunchPlay/user/status' + userIdParam()).then(function (data) {
           if (data.connected) {
             showConnected(data.username, data.connectedAt);
           } else {
@@ -181,7 +236,29 @@
           if (data.punchPlayUrl) el('pp-url-input').value = data.punchPlayUrl;
           if (data.progressIntervalSeconds) el('pp-interval-input').value = data.progressIntervalSeconds;
           el('pp-admin-section').style.display = '';
-        }).catch(function () {});
+        }).catch(function () {
+          setStatus('Could not load admin server settings.');
+        });
+      }
+
+      function loadAdminStatus() {
+        apiGet('PunchPlay/settings/status').then(function (data) {
+          el('pp-admin-diagnostics').style.display = '';
+          el('pp-diagnostics-summary').textContent =
+            'Plugin v' + (data.pluginVersion || 'unknown') +
+            ' | API ' + (data.punchPlayUrl || '') +
+            ' | Queue ' + (data.queuedScrobbleCount || 0) +
+            ' | Oldest queued ' + formatDateTime(data.oldestQueuedScrobbleAt) +
+            ' | Next retry ' + formatDateTime(data.nextQueuedRetryAt) +
+            ' | Highest retry ' + (data.highestQueuedRetryCount || 0) +
+            ' | Linked users ' + (data.linkedUserCount || 0) +
+            ' | Last success ' + formatDateTime(data.lastSuccessfulScrobbleAt) +
+            ' | Last failure ' + formatDateTime(data.lastFailedScrobbleAt);
+          el('pp-diagnostics-error').textContent = data.lastError ? ('Last error: ' + data.lastError) : '';
+        }).catch(function () {
+          el('pp-diagnostics-summary').textContent = 'Could not load plugin diagnostics.';
+          el('pp-diagnostics-error').textContent = '';
+        });
       }
 
       function poll() {
@@ -190,12 +267,20 @@
           if (data.status === 'complete') {
             stopPoll();
             loadUserStatus();
+            if (isAdmin) loadAdminStatus();
           }
         }).catch(function (resp) {
           if (resp && resp.status === 410) {
             stopPoll();
             showDisconnected();
             setStatus('The login code expired. Please try again.');
+            return;
+          }
+
+          if (resp && resp.status === 403) {
+            stopPoll();
+            showDisconnected();
+            setStatus('This login flow belongs to another Jellyfin user.');
           }
         });
       }
@@ -203,26 +288,48 @@
       function startLogin() {
         var btn = el('pp-login-btn');
         btn.disabled = true;
-        setStatus('Starting PunchPlay login...');
+        setStatus('Starting PunchPlay login for ' + selectedUserName + '...');
 
-        apiPost('PunchPlay/user/auth/start').then(function (data) {
+        apiPost('PunchPlay/user/auth/start' + userIdParam()).then(function (data) {
           btn.disabled = false;
           sessionId = data.sessionId;
           showAuthFlow(data.userCode, data.qrDataUri, data.expiresIn);
           pollTimer = setInterval(poll, 3000);
-        }).catch(function () {
+        }).catch(function (resp) {
           btn.disabled = false;
-          setStatus('Could not reach PunchPlay. Check the URL in Advanced settings.');
+          setStatus(extractErrorMessage(resp, 'Could not reach PunchPlay. Check the URL in Advanced settings.'));
         });
       }
 
       function disconnect() {
-        Dashboard.confirm('Disconnect your PunchPlay account from this Jellyfin profile?', 'Disconnect', function (confirmed) {
+        Dashboard.confirm('Disconnect PunchPlay from ' + selectedUserName + '?', 'Disconnect', function (confirmed) {
           if (!confirmed) return;
-          apiDelete('PunchPlay/user/auth/disconnect').then(function () {
+          apiDelete('PunchPlay/user/auth/disconnect' + userIdParam()).then(function () {
             showDisconnected();
+            if (isAdmin) loadAdminStatus();
           }).catch(function () {
             setStatus('Could not disconnect PunchPlay.');
+          });
+        });
+      }
+
+      function retryQueue() {
+        apiPost('PunchPlay/settings/queue/retry').then(function () {
+          loadAdminStatus();
+          setStatus('Queue retry completed.');
+        }).catch(function () {
+          setStatus('Could not retry the queue.');
+        });
+      }
+
+      function clearQueue() {
+        Dashboard.confirm('Clear the queued scrobbles for this server?', 'Clear Queue', function (confirmed) {
+          if (!confirmed) return;
+          apiDelete('PunchPlay/settings/queue').then(function () {
+            loadAdminStatus();
+            setStatus('Queue cleared.');
+          }).catch(function () {
+            setStatus('Could not clear the queue.');
           });
         });
       }
@@ -230,45 +337,114 @@
       function saveAdvanced() {
         var url = (el('pp-url-input').value || 'https://punchplay.tv').trim().replace(/\/$/, '');
         var interval = parseInt(el('pp-interval-input').value, 10) || 15;
-        var body = {
+        apiPost('PunchPlay/settings', {
           punchPlayUrl: url,
           progressIntervalSeconds: Math.min(300, Math.max(5, interval))
-        };
-
-        apiPost('PunchPlay/settings', body).then(function () {
-          setStatus('Settings saved.');
+        }).then(function () {
+          setStatus('Server settings saved.');
+          loadAdminStatus();
         }).catch(function () {
-          setStatus('Could not save settings.');
+          setStatus('Could not save server settings.');
         });
       }
 
-      function bindButtons() {
-        var loginBtn = el('pp-login-btn');
-        if (!loginBtn || loginBtn._ppBound) return;
-        loginBtn._ppBound = true;
+      function populateUsers(users) {
+        var selector = el('pp-user-selector');
+        if (!selector) return;
 
-        loginBtn.addEventListener('click', startLogin);
-        el('pp-disconnect-btn').addEventListener('click', disconnect);
-        el('pp-cancel-btn').addEventListener('click', function () { stopPoll(); showDisconnected(); });
-        el('pp-save-btn').addEventListener('click', saveAdvanced);
+        selector.innerHTML = '';
+        users.forEach(function (user) {
+          var opt = document.createElement('option');
+          opt.value = user.Id;
+          opt.textContent = user.Name;
+          selector.appendChild(opt);
+        });
 
-        ApiClient.getCurrentUser().then(function (user) {
-          if (user && user.Policy && user.Policy.IsAdministrator) {
-            loadAdminSettings();
+        if (selectedUserId) selector.value = selectedUserId;
+        if (!selector.value && users.length) selector.value = users[0].Id;
+        selectedUserId = selector.value || null;
+
+        for (var i = 0; i < users.length; i++) {
+          if (users[i].Id === selectedUserId) {
+            selectedUserName = users[i].Name;
+            break;
           }
-        }).catch(function () {});
+        }
+
+        if (users.length > 1) {
+          el('pp-user-section').style.display = '';
+        }
 
         loadUserStatus();
       }
 
+      function loadAdminUsers() {
+        ApiClient.getUsers().then(function (users) {
+          populateUsers(users || []);
+        }).catch(function () {
+          selectedUserId = currentUser && currentUser.Id ? currentUser.Id : selectedUserId;
+          selectedUserName = currentUser && currentUser.Name ? currentUser.Name : selectedUserName;
+          loadUserStatus();
+        });
+      }
+
+      function refreshPage() {
+        stopPoll();
+        ApiClient.getCurrentUser().then(function (user) {
+          currentUser = user || null;
+          isAdmin = !!(user && user.Policy && user.Policy.IsAdministrator);
+          selectedUserId = user && user.Id ? user.Id : null;
+          selectedUserName = user && user.Name ? user.Name : 'Current user';
+
+          if (isAdmin) {
+            el('pp-account-note').textContent = 'Select a Jellyfin user to manage their PunchPlay link. Server settings and diagnostics are admin-only.';
+            loadAdminUsers();
+            loadAdminSettings();
+            loadAdminStatus();
+          } else {
+            el('pp-account-note').textContent = 'This Jellyfin user manages only their own PunchPlay link. Server settings are admin-only.';
+            el('pp-user-section').style.display = 'none';
+            el('pp-admin-section').style.display = 'none';
+            el('pp-admin-diagnostics').style.display = 'none';
+            loadUserStatus();
+          }
+        }).catch(function () {
+          loadUserStatus();
+        });
+      }
+
+      function bindButtons() {
+        var page = el('PunchPlayConfigPage');
+        if (!page || page._ppBound) return;
+        page._ppBound = true;
+
+        el('pp-login-btn').addEventListener('click', startLogin);
+        el('pp-disconnect-btn').addEventListener('click', disconnect);
+        el('pp-cancel-btn').addEventListener('click', function () { stopPoll(); showDisconnected(); });
+        el('pp-save-btn').addEventListener('click', saveAdvanced);
+        el('pp-retry-queue-btn').addEventListener('click', retryQueue);
+        el('pp-clear-queue-btn').addEventListener('click', clearQueue);
+
+        el('pp-user-selector').addEventListener('change', function () {
+          selectedUserId = this.value || null;
+          selectedUserName = this.options[this.selectedIndex] ? this.options[this.selectedIndex].text : 'Current user';
+          stopPoll();
+          showDisconnected();
+          loadUserStatus();
+        });
+      }
+
       var page = document.querySelector('#PunchPlayConfigPage');
       if (page) {
-        page.addEventListener('pageshow', bindButtons);
-        page.addEventListener('viewshow', bindButtons);
+        page.addEventListener('pageshow', function () { bindButtons(); refreshPage(); });
+        page.addEventListener('viewshow', function () { bindButtons(); refreshPage(); });
         page.addEventListener('viewhide', stopPoll);
       }
 
-      setTimeout(bindButtons, 500);
+      setTimeout(function () {
+        bindButtons();
+        refreshPage();
+      }, 500);
 
     }());
   </script>

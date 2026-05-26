@@ -12,8 +12,17 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
     /// <inheritdoc />
     public void RegisterServices(IServiceCollection serviceCollection, IServerApplicationHost applicationHost)
     {
-        serviceCollection.AddHttpClient();
+        serviceCollection.AddHttpClient("PunchPlay", client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(10);
+        });
+        serviceCollection.AddSingleton<PluginDiagnosticsService>();
+        serviceCollection.AddSingleton<ScrobblePayloadFactory>();
+        serviceCollection.AddSingleton<PunchPlayTransport>();
+        serviceCollection.AddSingleton<ScrobbleQueueService>();
+        serviceCollection.AddSingleton<PunchPlayScrobbleClient>();
         serviceCollection.AddSingleton<DeviceAuthService>();
+        serviceCollection.AddHostedService(serviceProvider => serviceProvider.GetRequiredService<ScrobbleQueueService>());
         serviceCollection.AddHostedService<PlaybackScrobbler>();
     }
 }
