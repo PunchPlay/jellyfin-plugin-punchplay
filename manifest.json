@@ -9,127 +9,23 @@
     "versions": [
       {
         "version": "2.0.15.0",
-        "changelog": "Remove diagnostic logging added during linked-username debugging; flow is confirmed working as of v2.0.14.",
+        "changelog": "Current stable release with per-user linking, Jellyfin username reporting, playback session tracking, pause/resume scrobbling, retry queueing, token-revocation cleanup, and admin diagnostics.",
         "targetAbi": "10.10.0.0",
         "sourceUrl": "https://raw.githubusercontent.com/PunchPlay/jellyfin-plugin-punchplay/main/release-assets/jellyfin-plugin-punchplay_2.0.15.zip",
         "checksum": "1142a0b796c4230f9346be4c976ebdd2",
         "timestamp": "2026-05-26T13:00:00Z"
       },
       {
-        "version": "2.0.14.0",
-        "changelog": "Fix linked Jellyfin username by passing it as a query parameter instead of request body, matching how userId is already sent.",
-        "targetAbi": "10.10.0.0",
-        "sourceUrl": "https://raw.githubusercontent.com/PunchPlay/jellyfin-plugin-punchplay/main/release-assets/jellyfin-plugin-punchplay_2.0.14.zip",
-        "checksum": "67b56100a3bb931723d0c80f1712c322",
-        "timestamp": "2026-05-26T12:15:00Z"
-      },
-      {
-        "version": "2.0.13.0",
-        "changelog": "Add detailed logging throughout the device-link flow to diagnose linked username propagation.",
-        "targetAbi": "10.10.0.0",
-        "sourceUrl": "https://raw.githubusercontent.com/PunchPlay/jellyfin-plugin-punchplay/main/release-assets/jellyfin-plugin-punchplay_2.0.13.zip",
-        "checksum": "f492e3ebd0ada8d2f25f06d6f463726e",
-        "timestamp": "2026-05-26T11:45:00Z"
-      },
-      {
-        "version": "2.0.12.0",
-        "changelog": "Fix linked Jellyfin username by sending it in the POST body instead of as a query param, which was silently dropped by Jellyfin's ApiClient.",
-        "targetAbi": "10.10.0.0",
-        "sourceUrl": "https://raw.githubusercontent.com/PunchPlay/jellyfin-plugin-punchplay/main/release-assets/jellyfin-plugin-punchplay_2.0.12.zip",
-        "checksum": "956e7c53b1739a1178a728a7e3d3090e",
-        "timestamp": "2026-05-26T11:15:00Z"
-      },
-      {
-        "version": "2.0.11.0",
-        "changelog": "Fix linked Jellyfin username not populating in PunchPlay settings by passing query params via ApiClient.getUrl() params object instead of embedding them in the URL string.",
-        "targetAbi": "10.10.0.0",
-        "sourceUrl": "https://raw.githubusercontent.com/PunchPlay/jellyfin-plugin-punchplay/main/release-assets/jellyfin-plugin-punchplay_2.0.11.zip",
-        "checksum": "a8b6043d971803bdb5d7a7589cd6edec",
-        "timestamp": "2026-05-26T10:45:00Z"
-      },
-      {
-        "version": "2.0.10.0",
-        "changelog": "Hotfix the Jellyfin linked-user flow again by removing all IUserManager runtime dependencies and passing the selected Jellyfin username through a query parameter instead.",
-        "targetAbi": "10.10.0.0",
-        "sourceUrl": "https://raw.githubusercontent.com/PunchPlay/jellyfin-plugin-punchplay/main/release-assets/jellyfin-plugin-punchplay_2.0.10.zip",
-        "checksum": "09433495a6e0fc9f0d2543f8a0244f01",
-        "timestamp": "2026-05-26T08:37:37Z"
-      },
-      {
-        "version": "2.0.9.0",
-        "changelog": "Hotfix the Jellyfin linked-user lookup for 10.10 compatibility by resolving the username from IUserManager.Users instead of calling the missing GetUserById(Guid) runtime method.",
-        "targetAbi": "10.10.0.0",
-        "sourceUrl": "https://raw.githubusercontent.com/PunchPlay/jellyfin-plugin-punchplay/main/release-assets/jellyfin-plugin-punchplay_2.0.9.zip",
-        "checksum": "b88f6d793fca3222ad39771cb18a55f3",
-        "timestamp": "2026-05-26T08:27:49Z"
-      },
-      {
-        "version": "2.0.8.0",
-        "changelog": "Fix Jellyfin linked-user reporting by resolving the target Jellyfin username server-side during device auth, avoiding config-page request body binding issues.",
-        "targetAbi": "10.10.0.0",
-        "sourceUrl": "https://raw.githubusercontent.com/PunchPlay/jellyfin-plugin-punchplay/main/release-assets/jellyfin-plugin-punchplay_2.0.8.zip",
-        "checksum": "1ea8652efcbb86a5d6983c4c21b7d25e",
-        "timestamp": "2026-05-26T08:08:03Z"
-      },
-      {
-        "version": "2.0.7.0",
-        "changelog": "Linking now carries the selected Jellyfin user through device auth so PunchPlay can show who each Jellyfin server is linked to, and auth requests now report the plugin client version consistently.",
-        "targetAbi": "10.10.0.0",
-        "sourceUrl": "https://raw.githubusercontent.com/PunchPlay/jellyfin-plugin-punchplay/main/release-assets/jellyfin-plugin-punchplay_2.0.7.zip",
-        "checksum": "17b536a2e4c08f0d41825b0b542b6b69",
-        "timestamp": "2026-05-26T07:28:30Z"
-      },
-      {
         "version": "2.0.6.0",
-        "changelog": "Hardening pass: live scrobbles now signal background queue replay instead of waiting on it, manual queue retry force-retries queued entries immediately, and queue/auth regression coverage has been expanded.",
+        "changelog": "Reliability hardening release with background queue replay, force retry controls, improved auth/queue handling, session dedupe, and non-blocking live scrobble delivery.",
         "targetAbi": "10.10.0.0",
         "sourceUrl": "https://raw.githubusercontent.com/PunchPlay/jellyfin-plugin-punchplay/main/release-assets/jellyfin-plugin-punchplay_2.0.6.zip",
         "checksum": "ababdd8eaa45b1f7764baeed173029da",
         "timestamp": "2026-05-25T20:27:33Z"
       },
       {
-        "version": "2.0.5.0",
-        "changelog": "Hotfix: replace the Jellyfin user/admin access checks with policy-based authorization to avoid runtime ABI mismatches on Jellyfin 10.10.",
-        "targetAbi": "10.10.0.0",
-        "sourceUrl": "https://raw.githubusercontent.com/PunchPlay/jellyfin-plugin-punchplay/main/release-assets/jellyfin-plugin-punchplay_2.0.5.zip",
-        "checksum": "4937ff2fc32a430d067a8d52ada16618",
-        "timestamp": "2026-05-25T15:08:37Z"
-      },
-      {
-        "version": "2.0.4.0",
-        "changelog": "Hotfix: remove the Jellyfin user lookup ABI mismatch that broke PunchPlay login on 10.10, and show a clearer plugin-side error when auth start fails.",
-        "targetAbi": "10.10.0.0",
-        "sourceUrl": "https://raw.githubusercontent.com/PunchPlay/jellyfin-plugin-punchplay/main/release-assets/jellyfin-plugin-punchplay_2.0.4.zip",
-        "checksum": "552d47001e7a7b12455847bab5e54c49",
-        "timestamp": "2026-05-25T14:50:58Z"
-      },
-      {
-        "version": "2.0.3.0",
-        "changelog": "Hardening pass: automatic queued retry, queue cleanup on disconnect/401, stricter auth polling, improved session dedupe, CI build/test, and new automated tests.",
-        "targetAbi": "10.10.0.0",
-        "sourceUrl": "https://raw.githubusercontent.com/PunchPlay/jellyfin-plugin-punchplay/main/release-assets/jellyfin-plugin-punchplay_2.0.3.zip",
-        "checksum": "df89070a6fcd9cdc635686af503c79a9",
-        "timestamp": "2026-05-25T14:32:38Z"
-      },
-      {
-        "version": "2.0.2.0",
-        "changelog": "User dropdown: admins see all Jellyfin users and can link each one; non-admins self-serve their own account.",
-        "targetAbi": "10.10.0.0",
-        "sourceUrl": "https://github.com/PunchPlay/jellyfin-plugin-punchplay/releases/download/v2.0.2/jellyfin-plugin-punchplay_2.0.2.zip",
-        "checksum": "74e6eafe14002825f62a8efa4406f443",
-        "timestamp": "2026-05-18T14:00:00Z"
-      },
-      {
-        "version": "2.0.1.0",
-        "changelog": "Fix: per-user auth endpoints now correctly resolve the Jellyfin user ID using IAuthorizationContext.",
-        "targetAbi": "10.10.0.0",
-        "sourceUrl": "https://github.com/PunchPlay/jellyfin-plugin-punchplay/releases/download/v2.0.1/jellyfin-plugin-punchplay_2.0.1.zip",
-        "checksum": "3121597c43e0f2229f9863b14d535bdb",
-        "timestamp": "2026-05-18T13:00:00Z"
-      },
-      {
         "version": "2.0.0.0",
-        "changelog": "Multi-user support: each Jellyfin user links their own PunchPlay account; scrobbles are routed per-user.",
+        "changelog": "Multi-user support release allowing each Jellyfin user to link their own PunchPlay account with scrobbles routed per user.",
         "targetAbi": "10.10.0.0",
         "sourceUrl": "https://github.com/PunchPlay/jellyfin-plugin-punchplay/releases/download/v2.0.0/jellyfin-plugin-punchplay_2.0.0.zip",
         "checksum": "bd210bf736a6c2f028f62d9a7fdb402b",
@@ -137,99 +33,11 @@
       },
       {
         "version": "1.0.11.0",
-        "changelog": "Lower default progress interval to 15s (min 5s) for more accurate tracking.",
+        "changelog": "Final legacy single-user release with improved progress tracking interval and token revocation handling.",
         "targetAbi": "10.10.0.0",
         "sourceUrl": "https://github.com/PunchPlay/jellyfin-plugin-punchplay/releases/download/v1.0.11/jellyfin-plugin-punchplay_1.0.11.zip",
         "checksum": "eedf9af37f9520f7014c770fb3b813b2",
         "timestamp": "2026-05-18T11:00:00Z"
-      },
-      {
-        "version": "1.0.10.0",
-        "changelog": "Sync with punchplay.tv revoke: plugin auto-disconnects when token is revoked remotely.",
-        "targetAbi": "10.10.0.0",
-        "sourceUrl": "https://github.com/PunchPlay/jellyfin-plugin-punchplay/releases/download/v1.0.10/jellyfin-plugin-punchplay_1.0.10.zip",
-        "checksum": "4267c5dcd905e94949d5c07fa6f4deea",
-        "timestamp": "2026-05-18T10:00:00Z"
-      },
-      {
-        "version": "1.0.9.0",
-        "changelog": "Show friendly server name (e.g. \"Jellyfin (MacBook-Air.local)\") in PunchPlay settings.",
-        "targetAbi": "10.10.0.0",
-        "sourceUrl": "https://github.com/PunchPlay/jellyfin-plugin-punchplay/releases/download/v1.0.9/jellyfin-plugin-punchplay_1.0.9.zip",
-        "checksum": "7f3e52d15c702318a2ca9e55a8518169",
-        "timestamp": "2026-05-18T09:00:00Z"
-      },
-      {
-        "version": "1.0.8.0",
-        "changelog": "Fix: Send client_type=jellyfin on device auth so punchplay.tv/link shows Jellyfin branding.",
-        "targetAbi": "10.10.0.0",
-        "sourceUrl": "https://github.com/PunchPlay/jellyfin-plugin-punchplay/releases/download/v1.0.8/jellyfin-plugin-punchplay_1.0.8.zip",
-        "checksum": "b0cd7a52d1c245f47e63fe5d5f2038f3",
-        "timestamp": "2026-05-18T08:00:00Z"
-      },
-      {
-        "version": "1.0.7.0",
-        "changelog": "Fix: Config page buttons now work reliably.",
-        "targetAbi": "10.10.0.0",
-        "sourceUrl": "https://github.com/PunchPlay/jellyfin-plugin-punchplay/releases/download/v1.0.7/jellyfin-plugin-punchplay_1.0.7.zip",
-        "checksum": "92656b1924a9921cfbf0cefb0d85c0b6",
-        "timestamp": "2026-05-18T07:00:00Z"
-      },
-      {
-        "version": "1.0.6.0",
-        "changelog": "Diagnostic: add console logging and multiple binding strategies to trace button issue.",
-        "targetAbi": "10.10.0.0",
-        "sourceUrl": "https://github.com/PunchPlay/jellyfin-plugin-punchplay/releases/download/v1.0.6/jellyfin-plugin-punchplay_1.0.6.zip",
-        "checksum": "08c70111ec712e711f9567493359d936",
-        "timestamp": "2026-05-18T06:00:00Z"
-      },
-      {
-        "version": "1.0.5.0",
-        "changelog": "Fix: Config page buttons now respond to clicks (use pageshow lifecycle event per Jellyfin SPA conventions).",
-        "targetAbi": "10.10.0.0",
-        "sourceUrl": "https://github.com/PunchPlay/jellyfin-plugin-punchplay/releases/download/v1.0.5/jellyfin-plugin-punchplay_1.0.5.zip",
-        "checksum": "48605dca76b481ebc2bf146c2427529f",
-        "timestamp": "2026-05-18T05:00:00Z"
-      },
-      {
-        "version": "1.0.4.0",
-        "changelog": "Fix: Config page buttons (Login, Save) now respond to clicks.",
-        "targetAbi": "10.10.0.0",
-        "sourceUrl": "https://github.com/PunchPlay/jellyfin-plugin-punchplay/releases/download/v1.0.4/jellyfin-plugin-punchplay_1.0.4.zip",
-        "checksum": "da5047ceb94a35812d96bd82b52fd86b",
-        "timestamp": "2026-05-18T04:00:00Z"
-      },
-      {
-        "version": "1.0.3.0",
-        "changelog": "Bump to v1.0.3.",
-        "targetAbi": "10.10.0.0",
-        "sourceUrl": "https://github.com/PunchPlay/jellyfin-plugin-punchplay/releases/download/v1.0.3/jellyfin-plugin-punchplay_1.0.3.zip",
-        "checksum": "06495e708075f7472b9962c11d5c25ef",
-        "timestamp": "2026-05-18T03:00:00Z"
-      },
-      {
-        "version": "1.0.2.0",
-        "changelog": "Fix: Embed correct assembly version so Jellyfin replaces old installs on restart.",
-        "targetAbi": "10.10.0.0",
-        "sourceUrl": "https://github.com/PunchPlay/jellyfin-plugin-punchplay/releases/download/v1.0.2/jellyfin-plugin-punchplay_1.0.2.zip",
-        "checksum": "c6ab9552ee931c1a17f0d94ebfa9cad2",
-        "timestamp": "2026-05-18T02:00:00Z"
-      },
-      {
-        "version": "1.0.1.0",
-        "changelog": "Fix: Login button now wires up correctly in Jellyfin config page.",
-        "targetAbi": "10.10.0.0",
-        "sourceUrl": "https://github.com/PunchPlay/jellyfin-plugin-punchplay/releases/download/v1.0.1/jellyfin-plugin-punchplay_1.0.1.zip",
-        "checksum": "2a300e71dc8433682fdadd25514fc87c",
-        "timestamp": "2026-05-18T01:00:00Z"
-      },
-      {
-        "version": "1.0.0.0",
-        "changelog": "Initial release — scrobble playback to PunchPlay with full session tracking (start, pause, resume, stop).",
-        "targetAbi": "10.10.0.0",
-        "sourceUrl": "https://github.com/PunchPlay/jellyfin-plugin-punchplay/releases/download/v1.0.0/jellyfin-plugin-punchplay_1.0.0.zip",
-        "checksum": "7d3ba32315253612812476eace5fae2b",
-        "timestamp": "2026-05-18T00:00:00Z"
       }
     ]
   }
