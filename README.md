@@ -8,7 +8,7 @@ Scrobble Jellyfin playback to PunchPlay with per-user account linking and device
 - Device-code login with user code and QR flow
 - Movie and TV episode scrobbling
 - Playback start, progress, pause, resume, and stop events
-- Watching-now and continue-watching state aligned with PunchPlay's Kodi playback contract
+- Watching-now and continue-watching state
 - TMDB-first matching with IMDb/TVDB/title fallbacks
 - Local retry queue for transient PunchPlay API failures with automatic background replay
 
