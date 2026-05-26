@@ -25,7 +25,7 @@ public class DeviceAuthService
     /// <summary>
     /// Starts a device auth flow and returns the user-facing code and QR image.
     /// </summary>
-    public async Task<StartResult?> StartAsync(string jellyfinUserId, CancellationToken ct)
+    public async Task<StartResult?> StartAsync(string jellyfinUserId, string? jellyfinUsername, CancellationToken ct)
     {
         var plugin = Plugin.Instance;
         if (plugin is null) return null;
@@ -34,7 +34,11 @@ public class DeviceAuthService
         HttpResponseMessage response;
         try
         {
-            var codeRequest = JsonContent.Create(new { client_type = "jellyfin" });
+            var codeRequest = JsonContent.Create(new
+            {
+                client_type = "jellyfin",
+                client_version = plugin.ClientVersion
+            });
             response = await client.PostAsync(
                 $"{plugin.ApiBase}/api/auth/device/code",
                 codeRequest, ct).ConfigureAwait(false);
@@ -51,7 +55,7 @@ public class DeviceAuthService
 
         var sessionId = Guid.NewGuid().ToString("N");
         var expiry = DateTimeOffset.UtcNow.AddSeconds(body.ExpiresIn);
-        _pending[sessionId] = new PendingSession(body.DeviceCode, expiry, jellyfinUserId);
+        _pending[sessionId] = new PendingSession(body.DeviceCode, expiry, jellyfinUserId, jellyfinUsername);
 
         // Clean stale sessions
         foreach (var key in _pending.Keys)
@@ -88,8 +92,11 @@ public class DeviceAuthService
             {
                 device_code = session.DeviceCode,
                 client_type = "jellyfin",
+                client_version = plugin.ClientVersion,
                 device_id = plugin.EnsureServerId(),
-                device_name = plugin.FriendlyServerName
+                device_name = plugin.FriendlyServerName,
+                linked_user_id = session.TargetJellyfinUserId,
+                linked_username = session.TargetJellyfinUsername
             });
             response = await client.PostAsync($"{plugin.ApiBase}/api/auth/device/token", payload, ct)
                 .ConfigureAwait(false);
@@ -132,7 +139,7 @@ public class DeviceAuthService
         return session.Expiry < DateTimeOffset.UtcNow ? null : session.TargetJellyfinUserId;
     }
 
-    private record PendingSession(string DeviceCode, DateTimeOffset Expiry, string TargetJellyfinUserId);
+    private record PendingSession(string DeviceCode, DateTimeOffset Expiry, string TargetJellyfinUserId, string? TargetJellyfinUsername);
 
     private class DeviceCodeResponse
     {

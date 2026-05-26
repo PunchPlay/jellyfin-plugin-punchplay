@@ -9,14 +9,19 @@
             Manages in-progress device auth sessions (code → token polling).
             </summary>
         </member>
-        <member name="M:Jellyfin.Plugin.PunchPlay.DeviceAuthService.StartAsync(System.Threading.CancellationToken)">
+        <member name="M:Jellyfin.Plugin.PunchPlay.DeviceAuthService.StartAsync(System.String,System.String,System.Threading.CancellationToken)">
             <summary>
             Starts a device auth flow and returns the user-facing code and QR image.
             </summary>
         </member>
-        <member name="M:Jellyfin.Plugin.PunchPlay.DeviceAuthService.PollAsync(System.String,System.String,System.Threading.CancellationToken)">
+        <member name="M:Jellyfin.Plugin.PunchPlay.DeviceAuthService.PollAsync(System.String,System.Threading.CancellationToken)">
             <summary>
-            Polls PunchPlay for token completion. On success, stores the token for <paramref name="jellyfinUserId"/>.
+            Polls PunchPlay for token completion. On success, stores the token for the Jellyfin user bound at auth start.
+            </summary>
+        </member>
+        <member name="M:Jellyfin.Plugin.PunchPlay.DeviceAuthService.GetBoundUserId(System.String)">
+            <summary>
+            Returns the Jellyfin user bound to a pending device-auth session, if any.
             </summary>
         </member>
         <member name="T:Jellyfin.Plugin.PunchPlay.PlaybackScrobbler">
@@ -55,6 +60,21 @@
         </member>
         <member name="P:Jellyfin.Plugin.PunchPlay.Plugin.ApiBase">
             <summary>Base URL without trailing slash.</summary>
+        </member>
+        <member name="P:Jellyfin.Plugin.PunchPlay.Plugin.ClientVersion">
+            <summary>Stable plugin version reported to PunchPlay.</summary>
+        </member>
+        <member name="P:Jellyfin.Plugin.PunchPlay.Plugin.StateDirectoryPath">
+            <summary>Plugin-owned state directory for queue and other local state.</summary>
+        </member>
+        <member name="P:Jellyfin.Plugin.PunchPlay.Plugin.QueueFilePath">
+            <summary>Queue file path used for persisted transient scrobble retries.</summary>
+        </member>
+        <member name="P:Jellyfin.Plugin.PunchPlay.Plugin.FriendlyServerName">
+            <summary>Returns a friendly server name for device auth and diagnostics.</summary>
+        </member>
+        <member name="M:Jellyfin.Plugin.PunchPlay.Plugin.EnsureServerId">
+            <summary>Ensures the plugin has a stable PunchPlay server ID and returns it.</summary>
         </member>
         <member name="M:Jellyfin.Plugin.PunchPlay.Plugin.GetUserToken(System.String)">
             <summary>Returns the access token for the given Jellyfin user ID, or null if not linked.</summary>
@@ -102,6 +122,11 @@
         <member name="P:Jellyfin.Plugin.PunchPlay.PluginConfiguration.ServerId">
             <summary>Stable device ID sent to PunchPlay to identify this server.</summary>
         </member>
+        <member name="T:Jellyfin.Plugin.PunchPlay.PluginDiagnosticsService">
+            <summary>
+            Tracks runtime diagnostics for the PunchPlay plugin.
+            </summary>
+        </member>
         <member name="T:Jellyfin.Plugin.PunchPlay.PluginServiceRegistrator">
             <summary>
             Registers plugin services with Jellyfin's DI container.
@@ -121,6 +146,15 @@
         <member name="M:Jellyfin.Plugin.PunchPlay.PunchPlayController.SaveSettings(Jellyfin.Plugin.PunchPlay.PunchPlayController.SaveSettingsRequest)">
             <summary>Saves server-wide settings.</summary>
         </member>
+        <member name="M:Jellyfin.Plugin.PunchPlay.PunchPlayController.GetStatus">
+            <summary>Returns runtime plugin diagnostics for admins.</summary>
+        </member>
+        <member name="M:Jellyfin.Plugin.PunchPlay.PunchPlayController.RetryQueue(System.Threading.CancellationToken)">
+            <summary>Retries the local scrobble queue immediately.</summary>
+        </member>
+        <member name="M:Jellyfin.Plugin.PunchPlay.PunchPlayController.ClearQueue(System.Threading.CancellationToken)">
+            <summary>Clears the local scrobble retry queue.</summary>
+        </member>
         <member name="T:Jellyfin.Plugin.PunchPlay.PunchPlayUserController">
             <summary>
             Per-user endpoints — any authenticated Jellyfin user can link their own PunchPlay account.
@@ -136,14 +170,104 @@
         <member name="M:Jellyfin.Plugin.PunchPlay.PunchPlayUserController.Status(System.Nullable{System.Guid})">
             <summary>Returns a Jellyfin user's PunchPlay connection status.</summary>
         </member>
-        <member name="M:Jellyfin.Plugin.PunchPlay.PunchPlayUserController.StartAuth(System.Threading.CancellationToken)">
+        <member name="M:Jellyfin.Plugin.PunchPlay.PunchPlayUserController.StartAuth(System.Nullable{System.Guid},Jellyfin.Plugin.PunchPlay.PunchPlayUserController.StartAuthBody,System.Threading.CancellationToken)">
             <summary>Starts a device auth flow.</summary>
         </member>
-        <member name="M:Jellyfin.Plugin.PunchPlay.PunchPlayUserController.PollAuth(System.String,System.Nullable{System.Guid},System.Threading.CancellationToken)">
+        <member name="M:Jellyfin.Plugin.PunchPlay.PunchPlayUserController.PollAuth(System.String,System.Threading.CancellationToken)">
             <summary>Polls for device auth completion. Returns 202 while pending, 200 on success, 410 if expired.</summary>
         </member>
-        <member name="M:Jellyfin.Plugin.PunchPlay.PunchPlayUserController.Disconnect(System.Nullable{System.Guid})">
+        <member name="M:Jellyfin.Plugin.PunchPlay.PunchPlayUserController.Disconnect(System.Nullable{System.Guid},System.Threading.CancellationToken)">
             <summary>Disconnects a user's PunchPlay token.</summary>
+        </member>
+        <member name="T:Jellyfin.Plugin.PunchPlay.PunchPlayScrobbleClient">
+            <summary>
+            Coordinates live scrobble delivery, retry queueing, and token invalidation.
+            </summary>
+        </member>
+        <member name="M:Jellyfin.Plugin.PunchPlay.PunchPlayScrobbleClient.DispatchAsync(System.String,System.String,System.String,Jellyfin.Plugin.PunchPlay.ScrobblePayload,System.Threading.CancellationToken)">
+            <summary>
+            Sends a live scrobble to PunchPlay and queues it for retry if the failure is transient.
+            </summary>
+        </member>
+        <member name="T:Jellyfin.Plugin.PunchPlay.PunchPlayTransport">
+            <summary>
+            Sends scrobble payloads to PunchPlay and classifies the outcome for retry handling.
+            </summary>
+        </member>
+        <member name="M:Jellyfin.Plugin.PunchPlay.PunchPlayTransport.SendAsync(System.String,System.String,Jellyfin.Plugin.PunchPlay.ScrobblePayload,System.Threading.CancellationToken)">
+            <summary>
+            Sends a scrobble action to PunchPlay.
+            </summary>
+        </member>
+        <member name="T:Jellyfin.Plugin.PunchPlay.PunchPlayTransportResult">
+            <summary>
+            Classified result of a PunchPlay transport attempt.
+            </summary>
+        </member>
+        <member name="T:Jellyfin.Plugin.PunchPlay.PunchPlayTransportOutcome">
+            <summary>
+            High-level delivery classification for a PunchPlay scrobble request.
+            </summary>
+        </member>
+        <member name="T:Jellyfin.Plugin.PunchPlay.ScrobblePayload">
+            <summary>
+            Payload sent to PunchPlay scrobble endpoints.
+            </summary>
+        </member>
+        <member name="T:Jellyfin.Plugin.PunchPlay.ScrobblePayloadFactory">
+            <summary>
+            Builds scrobble payloads from Jellyfin playback events.
+            </summary>
+        </member>
+        <member name="M:Jellyfin.Plugin.PunchPlay.ScrobblePayloadFactory.Create(MediaBrowser.Controller.Library.PlaybackProgressEventArgs,System.String,System.String,System.String,System.String,System.String,System.Boolean,System.Nullable{System.DateTimeOffset})">
+            <summary>
+            Builds a PunchPlay payload for the supplied playback event.
+            </summary>
+        </member>
+        <member name="M:Jellyfin.Plugin.PunchPlay.ScrobblePayloadFactory.BuildSessionKey(MediaBrowser.Controller.Library.PlaybackProgressEventArgs)">
+            <summary>
+            Builds a stable in-memory session key used for duplicate suppression.
+            </summary>
+        </member>
+        <member name="M:Jellyfin.Plugin.PunchPlay.ScrobblePayloadFactory.BuildPlaybackSessionId(MediaBrowser.Controller.Library.PlaybackProgressEventArgs)">
+            <summary>
+            Builds the backend playback session identifier used for watching-now and continue-watching state.
+            </summary>
+        </member>
+        <member name="M:Jellyfin.Plugin.PunchPlay.ScrobblePayloadFactory.MeetsWatchedThreshold(System.Int32,System.Int32)">
+            <summary>
+            Returns true if the playback position is far enough through the item to count as watched.
+            </summary>
+        </member>
+        <member name="T:Jellyfin.Plugin.PunchPlay.ScrobbleQueueService">
+            <summary>
+            Persists transient scrobble failures and retries them with backoff.
+            </summary>
+        </member>
+        <member name="M:Jellyfin.Plugin.PunchPlay.ScrobbleQueueService.EnqueueAsync(System.String,System.String,Jellyfin.Plugin.PunchPlay.ScrobblePayload,System.Threading.CancellationToken)">
+            <summary>
+            Adds a scrobble to the retry queue.
+            </summary>
+        </member>
+        <member name="M:Jellyfin.Plugin.PunchPlay.ScrobbleQueueService.ClearAsync(System.Threading.CancellationToken)">
+            <summary>
+            Clears all queued scrobbles.
+            </summary>
+        </member>
+        <member name="M:Jellyfin.Plugin.PunchPlay.ScrobbleQueueService.ClearUserAsync(System.String,System.Threading.CancellationToken)">
+            <summary>
+            Clears all queued scrobbles for the specified Jellyfin user.
+            </summary>
+        </member>
+        <member name="M:Jellyfin.Plugin.PunchPlay.ScrobbleQueueService.RequestFlush">
+            <summary>
+            Requests that the background retry loop wake up and process due entries soon.
+            </summary>
+        </member>
+        <member name="M:Jellyfin.Plugin.PunchPlay.ScrobbleQueueService.RetryNowAsync(System.Threading.CancellationToken)">
+            <summary>
+            Runs a retry pass immediately.
+            </summary>
         </member>
     </members>
 </doc>

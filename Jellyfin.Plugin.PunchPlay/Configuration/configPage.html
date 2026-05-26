@@ -193,6 +193,13 @@
         return selectedUserId ? '?userId=' + encodeURIComponent(selectedUserId) : '';
       }
 
+      function startAuthParams() {
+        var params = {};
+        if (selectedUserId) params.userId = selectedUserId;
+        if (selectedUserName) params.jellyfinUsername = selectedUserName;
+        return params;
+      }
+
       function apiGet(path) {
         return ApiClient.ajax({
           type: 'GET',
@@ -201,10 +208,10 @@
         }).then(parseJsonResponse);
       }
 
-      function apiPost(path, data) {
+      function apiPost(path, params, data) {
         return ApiClient.ajax({
           type: 'POST',
-          url: ApiClient.getUrl(path),
+          url: ApiClient.getUrl(path, params || {}),
           dataType: 'json',
           contentType: 'application/json',
           data: JSON.stringify(data || {})
@@ -290,7 +297,7 @@
         btn.disabled = true;
         setStatus('Starting PunchPlay login for ' + selectedUserName + '...');
 
-        apiPost('PunchPlay/user/auth/start' + userIdParam()).then(function (data) {
+        apiPost('PunchPlay/user/auth/start', startAuthParams()).then(function (data) {
           btn.disabled = false;
           sessionId = data.sessionId;
           showAuthFlow(data.userCode, data.qrDataUri, data.expiresIn);
@@ -337,7 +344,7 @@
       function saveAdvanced() {
         var url = (el('pp-url-input').value || 'https://punchplay.tv').trim().replace(/\/$/, '');
         var interval = parseInt(el('pp-interval-input').value, 10) || 15;
-        apiPost('PunchPlay/settings', {
+        apiPost('PunchPlay/settings', {}, {
           punchPlayUrl: url,
           progressIntervalSeconds: Math.min(300, Math.max(5, interval))
         }).then(function () {

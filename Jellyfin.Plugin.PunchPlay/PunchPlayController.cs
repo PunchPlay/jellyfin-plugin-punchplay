@@ -3,6 +3,7 @@ using MediaBrowser.Controller.Net;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.PunchPlay;
 
@@ -118,17 +119,20 @@ public class PunchPlayUserController : ControllerBase
     private readonly IAuthorizationContext _authContext;
     private readonly IAuthorizationService _authorizationService;
     private readonly ScrobbleQueueService _queueService;
+    private readonly ILogger<PunchPlayUserController> _logger;
 
     public PunchPlayUserController(
         DeviceAuthService deviceAuth,
         IAuthorizationContext authContext,
         IAuthorizationService authorizationService,
-        ScrobbleQueueService queueService)
+        ScrobbleQueueService queueService,
+        ILogger<PunchPlayUserController> logger)
     {
         _deviceAuth = deviceAuth;
         _authContext = authContext;
         _authorizationService = authorizationService;
         _queueService = queueService;
+        _logger = logger;
     }
 
     /// <summary>
@@ -191,12 +195,16 @@ public class PunchPlayUserController : ControllerBase
     [HttpPost("auth/start")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status502BadGateway)]
-    public async Task<IActionResult> StartAuth([FromQuery] Guid? userId = null, CancellationToken ct = default)
+    public async Task<IActionResult> StartAuth(
+        [FromQuery] Guid? userId = null,
+        [FromQuery] string? jellyfinUsername = null,
+        CancellationToken ct = default)
     {
         var targetId = await GetTargetUserIdAsync(userId).ConfigureAwait(false);
         if (string.IsNullOrEmpty(targetId)) return StatusCode(401);
 
-        var result = await _deviceAuth.StartAsync(targetId, ct).ConfigureAwait(false);
+        var linkedUsername = string.IsNullOrWhiteSpace(jellyfinUsername) ? null : jellyfinUsername.Trim();
+        var result = await _deviceAuth.StartAsync(targetId, linkedUsername, ct).ConfigureAwait(false);
         if (result is null) return StatusCode(502, new { error = "Could not reach PunchPlay. Check the URL in plugin settings." });
 
         return Ok(new
@@ -252,6 +260,5 @@ public class PunchPlayUserController : ControllerBase
         await _queueService.ClearUserAsync(targetId, ct).ConfigureAwait(false);
         return NoContent();
     }
-
     private sealed record CurrentAccessContext(Guid UserId, bool IsAdmin);
 }

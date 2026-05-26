@@ -8,11 +8,12 @@ public class PunchPlayUserControllerTests
     public async Task StartAsync_BindsPendingSessionToTargetUser()
     {
         using var pluginContext = new TestPluginContext();
-        var deviceAuthService = CreateDeviceAuthService(CreateDeviceAuthHandler());
+        const string targetUserId = "target-user-1";
+        var deviceAuthService = CreateDeviceAuthService(CreateDeviceAuthHandler(targetUserId));
 
         var start = Assert.IsType<DeviceAuthService.StartResult>(
-            await deviceAuthService.StartAsync("target-user-1", CancellationToken.None));
-        Assert.Equal("target-user-1", deviceAuthService.GetBoundUserId(start.SessionId));
+            await deviceAuthService.StartAsync(targetUserId, "PopcornHead", CancellationToken.None));
+        Assert.Equal(targetUserId, deviceAuthService.GetBoundUserId(start.SessionId));
     }
 
     [Fact]
@@ -20,9 +21,9 @@ public class PunchPlayUserControllerTests
     {
         using var pluginContext = new TestPluginContext();
         var targetUserId = Guid.NewGuid();
-        var deviceAuthService = CreateDeviceAuthService(CreateDeviceAuthHandler());
+        var deviceAuthService = CreateDeviceAuthService(CreateDeviceAuthHandler(targetUserId.ToString()));
         var start = Assert.IsType<DeviceAuthService.StartResult>(
-            await deviceAuthService.StartAsync(targetUserId.ToString(), CancellationToken.None));
+            await deviceAuthService.StartAsync(targetUserId.ToString(), "PopcornHead", CancellationToken.None));
 
         var currentUser = CreateUser(targetUserId, isAdmin: false);
         var controller = CreateController(deviceAuthService, currentUser);
@@ -38,9 +39,9 @@ public class PunchPlayUserControllerTests
     {
         using var pluginContext = new TestPluginContext();
         var targetUserId = Guid.NewGuid();
-        var deviceAuthService = CreateDeviceAuthService(CreateDeviceAuthHandler());
+        var deviceAuthService = CreateDeviceAuthService(CreateDeviceAuthHandler(targetUserId.ToString()));
         var start = Assert.IsType<DeviceAuthService.StartResult>(
-            await deviceAuthService.StartAsync(targetUserId.ToString(), CancellationToken.None));
+            await deviceAuthService.StartAsync(targetUserId.ToString(), "PopcornHead", CancellationToken.None));
 
         var adminUser = CreateUser(Guid.NewGuid(), isAdmin: true);
         var controller = CreateController(deviceAuthService, adminUser);
@@ -56,9 +57,9 @@ public class PunchPlayUserControllerTests
     {
         using var pluginContext = new TestPluginContext();
         var targetUserId = Guid.NewGuid();
-        var deviceAuthService = CreateDeviceAuthService(CreateDeviceAuthHandler());
+        var deviceAuthService = CreateDeviceAuthService(CreateDeviceAuthHandler(targetUserId.ToString()));
         var start = Assert.IsType<DeviceAuthService.StartResult>(
-            await deviceAuthService.StartAsync(targetUserId.ToString(), CancellationToken.None));
+            await deviceAuthService.StartAsync(targetUserId.ToString(), "PopcornHead", CancellationToken.None));
 
         var otherUser = CreateUser(Guid.NewGuid(), isAdmin: false);
         var controller = CreateController(deviceAuthService, otherUser);
@@ -74,7 +75,7 @@ public class PunchPlayUserControllerTests
     {
         using var pluginContext = new TestPluginContext();
         var userId = Guid.NewGuid();
-        var deviceAuthService = CreateDeviceAuthService(CreateDeviceAuthHandler());
+        var deviceAuthService = CreateDeviceAuthService(CreateDeviceAuthHandler("target-user-1"));
         var controller = CreateController(deviceAuthService, CreateUser(userId, isAdmin: false));
 
         var result = await controller.PollAuth("missing-session", CancellationToken.None);
@@ -100,7 +101,7 @@ public class PunchPlayUserControllerTests
             RetryCount = 0
         });
 
-        var deviceAuthService = CreateDeviceAuthService(CreateDeviceAuthHandler());
+        var deviceAuthService = CreateDeviceAuthService(CreateDeviceAuthHandler("target-user-1"));
         var controller = CreateController(deviceAuthService, CreateUser(userId, isAdmin: false));
 
         var result = await controller.Disconnect(null);
@@ -143,7 +144,7 @@ public class PunchPlayUserControllerTests
             new PluginDiagnosticsService(),
             NullLogger<ScrobbleQueueService>.Instance);
 
-        var controller = new PunchPlayUserController(deviceAuthService, authContext.Object, authorizationService.Object, queueService)
+        var controller = new PunchPlayUserController(deviceAuthService, authContext.Object, authorizationService.Object, queueService, NullLogger<PunchPlayUserController>.Instance)
         {
             ControllerContext = new ControllerContext
             {
@@ -179,28 +180,41 @@ public class PunchPlayUserControllerTests
         return user;
     }
 
-    private static DelegateHttpMessageHandler CreateDeviceAuthHandler()
+    private static DelegateHttpMessageHandler CreateDeviceAuthHandler(string expectedLinkedUserId, string expectedLinkedUsername = "PopcornHead")
     {
-        return new DelegateHttpMessageHandler((request, _) =>
+        return new DelegateHttpMessageHandler(async (request, _) =>
         {
             if (request.RequestUri!.AbsolutePath.EndsWith("/api/auth/device/code", StringComparison.Ordinal))
             {
-                return Task.FromResult(CreateJsonResponse(HttpStatusCode.OK, new
+                var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync());
+                Assert.Equal("jellyfin", body.RootElement.GetProperty("client_type").GetString());
+                Assert.Equal(typeof(Plugin).Assembly.GetName().Version?.ToString(), body.RootElement.GetProperty("client_version").GetString());
+
+                return CreateJsonResponse(HttpStatusCode.OK, new
                 {
                     user_code = "ABCD-EFGH",
                     device_code = "device-code-123",
                     verification_uri_qr = "data:image/png;base64,AAA",
                     expires_in = 900
-                }));
+                });
             }
 
             if (request.RequestUri!.AbsolutePath.EndsWith("/api/auth/device/token", StringComparison.Ordinal))
             {
-                return Task.FromResult(CreateJsonResponse(HttpStatusCode.OK, new
+                var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync());
+                Assert.Equal("device-code-123", body.RootElement.GetProperty("device_code").GetString());
+                Assert.Equal("jellyfin", body.RootElement.GetProperty("client_type").GetString());
+                Assert.Equal(typeof(Plugin).Assembly.GetName().Version?.ToString(), body.RootElement.GetProperty("client_version").GetString());
+                Assert.Equal("test-server-id", body.RootElement.GetProperty("device_id").GetString());
+                Assert.StartsWith("Jellyfin", body.RootElement.GetProperty("device_name").GetString(), StringComparison.Ordinal);
+                Assert.Equal(expectedLinkedUserId, body.RootElement.GetProperty("linked_user_id").GetString());
+                Assert.Equal(expectedLinkedUsername, body.RootElement.GetProperty("linked_username").GetString());
+
+                return CreateJsonResponse(HttpStatusCode.OK, new
                 {
                     access_token = "access-token-123",
                     username = "punchplay-user"
-                }));
+                });
             }
 
             throw new InvalidOperationException($"Unexpected request URI: {request.RequestUri}");
