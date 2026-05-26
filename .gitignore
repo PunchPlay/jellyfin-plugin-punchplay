@@ -6,3 +6,4 @@ TestResults/
 *.user
 .DS_Store
 *.zip
+!release-assets/*.zip

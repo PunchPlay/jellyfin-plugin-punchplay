@@ -62,7 +62,7 @@ Scrobble Jellyfin playback to PunchPlay with per-user account linking and device
 
 ## Release checklist
 
-- Build and publish the plugin zip artifact
+- Build and publish the plugin zip artifact into `release-assets/`
 - Update `manifest.json` with stable public releases only; do not list internal test, debug, or superseded hotfix builds
 - Verify release checksum matches the published zip
 - Keep the plugin version consistent across:
