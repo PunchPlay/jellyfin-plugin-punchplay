@@ -102,7 +102,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     }
 
     /// <summary>Stores or replaces the token for a Jellyfin user.</summary>
-    public void SetUserToken(string jellyfinUserId, string accessToken, string punchPlayUsername)
+    public void SetUserToken(string jellyfinUserId, string accessToken, string punchPlayUsername, string refreshToken = "")
     {
         var cfg = Configuration;
         var existing = cfg.UserTokens
@@ -111,6 +111,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
         if (existing is not null)
         {
             existing.AccessToken = accessToken;
+            existing.RefreshToken = refreshToken;
             existing.PunchPlayUsername = punchPlayUsername;
             existing.ConnectedAt = DateTime.UtcNow;
         }
@@ -120,11 +121,29 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
             {
                 JellyfinUserId = jellyfinUserId,
                 AccessToken = accessToken,
+                RefreshToken = refreshToken,
                 PunchPlayUsername = punchPlayUsername,
                 ConnectedAt = DateTime.UtcNow
             });
         }
 
+        SaveConfiguration(cfg);
+    }
+
+    /// <summary>
+    /// Updates just the access/refresh token pair after a silent refresh, leaving the linked
+    /// username and original connection timestamp untouched. No-op if the user isn't linked.
+    /// </summary>
+    public void UpdateUserTokens(string jellyfinUserId, string accessToken, string refreshToken)
+    {
+        var cfg = Configuration;
+        var existing = cfg.UserTokens
+            .FirstOrDefault(t => string.Equals(t.JellyfinUserId, jellyfinUserId, StringComparison.OrdinalIgnoreCase));
+        if (existing is null)
+            return;
+
+        existing.AccessToken = accessToken;
+        existing.RefreshToken = refreshToken;
         SaveConfiguration(cfg);
     }
 

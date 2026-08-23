@@ -20,6 +20,7 @@ public class ScrobbleQueueService : BackgroundService
     };
 
     private readonly PunchPlayTransport _transport;
+    private readonly PunchPlayAuthService _authService;
     private readonly PluginDiagnosticsService _diagnostics;
     private readonly ILogger<ScrobbleQueueService> _logger;
     private readonly SemaphoreSlim _sync = new(1, 1);
@@ -31,10 +32,12 @@ public class ScrobbleQueueService : BackgroundService
 
     public ScrobbleQueueService(
         PunchPlayTransport transport,
+        PunchPlayAuthService authService,
         PluginDiagnosticsService diagnostics,
         ILogger<ScrobbleQueueService> logger)
     {
         _transport = transport;
+        _authService = authService;
         _diagnostics = diagnostics;
         _logger = logger;
     }
@@ -247,6 +250,21 @@ public class ScrobbleQueueService : BackgroundService
                     changed = true;
                     break;
                 case PunchPlayTransportOutcome.Unauthorized:
+                    var refreshedToken = await _authService.RefreshAccessTokenAsync(entry.JellyfinUserId, token, ct).ConfigureAwait(false);
+                    if (refreshedToken is not null)
+                    {
+                        var retryResult = await _transport.SendAsync(entry.Action, refreshedToken, entry.Payload, ct).ConfigureAwait(false);
+                        if (retryResult.Outcome == PunchPlayTransportOutcome.Success)
+                        {
+                            _diagnostics.MarkSuccess();
+                            await RemoveEntryAsync(entry.Id, ct).ConfigureAwait(false);
+                            changed = true;
+                            break;
+                        }
+
+                        result = retryResult;
+                    }
+
                     plugin.ClearUserToken(entry.JellyfinUserId);
                     _diagnostics.MarkFailure(result.Message);
                     await RemoveUserEntriesAsync(entry.JellyfinUserId, ct).ConfigureAwait(false);

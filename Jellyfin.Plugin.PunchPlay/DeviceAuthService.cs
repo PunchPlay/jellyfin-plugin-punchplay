@@ -123,7 +123,11 @@ public class DeviceAuthService
 
         _pending.TryRemove(sessionId, out _);
 
-        plugin.SetUserToken(session.TargetJellyfinUserId, tokenBody.AccessToken, tokenBody.Username ?? string.Empty);
+        plugin.SetUserToken(
+            session.TargetJellyfinUserId,
+            tokenBody.AccessToken,
+            tokenBody.Username ?? string.Empty,
+            tokenBody.RefreshToken ?? string.Empty);
 
         return PollResult.Complete;
     }
@@ -152,6 +156,7 @@ public class DeviceAuthService
     private class TokenResponse
     {
         [JsonPropertyName("access_token")] public string? AccessToken { get; set; }
+        [JsonPropertyName("refresh_token")] public string? RefreshToken { get; set; }
         [JsonPropertyName("username")] public string? Username { get; set; }
     }
 

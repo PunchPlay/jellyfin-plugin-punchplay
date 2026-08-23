@@ -8,17 +8,20 @@ namespace Jellyfin.Plugin.PunchPlay;
 public class PunchPlayScrobbleClient
 {
     private readonly PunchPlayTransport _transport;
+    private readonly PunchPlayAuthService _authService;
     private readonly ScrobbleQueueService _queueService;
     private readonly PluginDiagnosticsService _diagnostics;
     private readonly ILogger<PunchPlayScrobbleClient> _logger;
 
     public PunchPlayScrobbleClient(
         PunchPlayTransport transport,
+        PunchPlayAuthService authService,
         ScrobbleQueueService queueService,
         PluginDiagnosticsService diagnostics,
         ILogger<PunchPlayScrobbleClient> logger)
     {
         _transport = transport;
+        _authService = authService;
         _queueService = queueService;
         _diagnostics = diagnostics;
         _logger = logger;
@@ -39,6 +42,17 @@ public class PunchPlayScrobbleClient
             return;
 
         var result = await _transport.SendAsync(action, accessToken, payload, ct).ConfigureAwait(false);
+
+        if (result.Outcome == PunchPlayTransportOutcome.Unauthorized)
+        {
+            var refreshedToken = await _authService.RefreshAccessTokenAsync(jellyfinUserId, accessToken, ct).ConfigureAwait(false);
+            if (refreshedToken is not null)
+            {
+                _logger.LogDebug("[PunchPlay] Retrying {Action} for user {UserId} after token refresh", action, jellyfinUserId);
+                result = await _transport.SendAsync(action, refreshedToken, payload, ct).ConfigureAwait(false);
+            }
+        }
+
         switch (result.Outcome)
         {
             case PunchPlayTransportOutcome.Success:

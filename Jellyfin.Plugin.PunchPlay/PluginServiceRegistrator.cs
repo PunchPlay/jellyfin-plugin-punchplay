@@ -19,6 +19,7 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<PluginDiagnosticsService>();
         serviceCollection.AddSingleton<ScrobblePayloadFactory>();
         serviceCollection.AddSingleton<PunchPlayTransport>();
+        serviceCollection.AddSingleton<PunchPlayAuthService>();
         serviceCollection.AddSingleton<ScrobbleQueueService>();
         serviceCollection.AddSingleton<PunchPlayScrobbleClient>();
         serviceCollection.AddSingleton<DeviceAuthService>();

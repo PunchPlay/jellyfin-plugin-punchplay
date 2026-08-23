@@ -13,6 +13,9 @@ public class UserToken
     /// <summary>Bearer token obtained via device auth flow.</summary>
     public string AccessToken { get; set; } = string.Empty;
 
+    /// <summary>Refresh token used to silently renew the access token when it expires (1 hour lifetime).</summary>
+    public string RefreshToken { get; set; } = string.Empty;
+
     /// <summary>PunchPlay username shown in settings after login.</summary>
     public string PunchPlayUsername { get; set; } = string.Empty;
 

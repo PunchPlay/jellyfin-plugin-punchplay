@@ -87,6 +87,57 @@ public class ScrobbleQueueServiceTests
     }
 
     [Fact]
+    public async Task RetryNowAsync_RefreshesExpiredTokenAndRetriesSuccessfully()
+    {
+        using var pluginContext = new TestPluginContext();
+        pluginContext.Plugin.SetUserToken("user-1", "stale-token", "user-one", "refresh-token-1");
+        await WriteQueueEntriesAsync(pluginContext, CreateQueueEntry("entry-1", "pause", "user-1", retryCount: 0, nextAttemptAtUtc: DateTimeOffset.UtcNow.AddMinutes(-1)));
+
+        var handler = new DelegateHttpMessageHandler((request, _) =>
+        {
+            if (request.RequestUri!.AbsolutePath == "/api/auth/refresh")
+            {
+                return Task.FromResult(CreateJsonResponse(HttpStatusCode.OK, new { access_token = "fresh-token", refresh_token = "refresh-token-2" }));
+            }
+
+            var presented = request.Headers.Authorization?.Parameter;
+            return Task.FromResult(presented == "fresh-token"
+                ? new HttpResponseMessage(HttpStatusCode.NoContent)
+                : CreateJsonResponse(HttpStatusCode.Unauthorized, new { error = "expired" }));
+        });
+        var diagnostics = new PluginDiagnosticsService();
+        var queueService = CreateQueueService(handler, diagnostics);
+
+        await queueService.RetryNowAsync(CancellationToken.None);
+
+        Assert.Empty(await ReadQueueEntriesAsync(pluginContext));
+        Assert.Equal("fresh-token", pluginContext.Plugin.GetUserToken("user-1"));
+        Assert.Equal("refresh-token-2", pluginContext.Plugin.GetUserTokenRecord("user-1")?.RefreshToken);
+        Assert.Equal(0, diagnostics.QueuedScrobbleCount);
+    }
+
+    [Fact]
+    public async Task RetryNowAsync_ClearsTokenWhenRefreshTokenIsRejected()
+    {
+        using var pluginContext = new TestPluginContext();
+        pluginContext.Plugin.SetUserToken("user-1", "stale-token", "user-one", "dead-refresh-token");
+        await WriteQueueEntriesAsync(pluginContext, CreateQueueEntry("entry-1", "pause", "user-1", retryCount: 0, nextAttemptAtUtc: DateTimeOffset.UtcNow.AddMinutes(-1)));
+
+        var handler = new DelegateHttpMessageHandler((request, _) =>
+        {
+            return request.RequestUri!.AbsolutePath == "/api/auth/refresh"
+                ? Task.FromResult(CreateJsonResponse(HttpStatusCode.Unauthorized, new { error = "invalid_grant" }))
+                : Task.FromResult(CreateJsonResponse(HttpStatusCode.Unauthorized, new { error = "expired" }));
+        });
+        var queueService = CreateQueueService(handler, new PluginDiagnosticsService());
+
+        await queueService.RetryNowAsync(CancellationToken.None);
+
+        Assert.Null(pluginContext.Plugin.GetUserToken("user-1"));
+        Assert.Empty(await ReadQueueEntriesAsync(pluginContext));
+    }
+
+    [Fact]
     public async Task RetryNowAsync_RetriesFutureEntriesWhenForced()
     {
         using var pluginContext = new TestPluginContext();
@@ -217,8 +268,10 @@ public class ScrobbleQueueServiceTests
 
     private static ScrobbleQueueService CreateQueueService(DelegateHttpMessageHandler handler, PluginDiagnosticsService diagnostics)
     {
-        var transport = new PunchPlayTransport(new TestHttpClientFactory(handler), NullLogger<PunchPlayTransport>.Instance);
-        return new ScrobbleQueueService(transport, diagnostics, NullLogger<ScrobbleQueueService>.Instance);
+        var factory = new TestHttpClientFactory(handler);
+        var transport = new PunchPlayTransport(factory, NullLogger<PunchPlayTransport>.Instance);
+        var authService = new PunchPlayAuthService(factory, NullLogger<PunchPlayAuthService>.Instance);
+        return new ScrobbleQueueService(transport, authService, diagnostics, NullLogger<ScrobbleQueueService>.Instance);
     }
 
     private static ScrobblePayload CreatePayload()

@@ -137,10 +137,10 @@ public class PunchPlayUserControllerTests
                 ? AuthorizationResult.Success()
                 : AuthorizationResult.Failed());
 
+        var testHttpClientFactory = new TestHttpClientFactory(new DelegateHttpMessageHandler((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.NoContent))));
         var queueService = new ScrobbleQueueService(
-            new PunchPlayTransport(
-                new TestHttpClientFactory(new DelegateHttpMessageHandler((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.NoContent)))),
-                NullLogger<PunchPlayTransport>.Instance),
+            new PunchPlayTransport(testHttpClientFactory, NullLogger<PunchPlayTransport>.Instance),
+            new PunchPlayAuthService(testHttpClientFactory, NullLogger<PunchPlayAuthService>.Instance),
             new PluginDiagnosticsService(),
             NullLogger<ScrobbleQueueService>.Instance);
 
