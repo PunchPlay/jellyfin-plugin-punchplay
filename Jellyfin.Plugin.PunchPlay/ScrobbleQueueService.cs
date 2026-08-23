@@ -242,6 +242,19 @@ public class ScrobbleQueueService : BackgroundService
             }
 
             var result = await _transport.SendAsync(entry.Action, token, entry.Payload, ct).ConfigureAwait(false);
+            if (result.Outcome == PunchPlayTransportOutcome.Unauthorized)
+            {
+                var refreshResult = await _authService.RefreshAccessTokenAsync(entry.JellyfinUserId, token, ct).ConfigureAwait(false);
+                if (refreshResult.Outcome == PunchPlayTokenRefreshOutcome.Refreshed)
+                {
+                    result = await _transport.SendAsync(entry.Action, refreshResult.AccessToken!, entry.Payload, ct).ConfigureAwait(false);
+                }
+                else if (refreshResult.Outcome == PunchPlayTokenRefreshOutcome.RetryableFailure)
+                {
+                    result = PunchPlayTransportResult.RetryableFailure(refreshResult.Message);
+                }
+            }
+
             switch (result.Outcome)
             {
                 case PunchPlayTransportOutcome.Success:
@@ -250,21 +263,6 @@ public class ScrobbleQueueService : BackgroundService
                     changed = true;
                     break;
                 case PunchPlayTransportOutcome.Unauthorized:
-                    var refreshedToken = await _authService.RefreshAccessTokenAsync(entry.JellyfinUserId, token, ct).ConfigureAwait(false);
-                    if (refreshedToken is not null)
-                    {
-                        var retryResult = await _transport.SendAsync(entry.Action, refreshedToken, entry.Payload, ct).ConfigureAwait(false);
-                        if (retryResult.Outcome == PunchPlayTransportOutcome.Success)
-                        {
-                            _diagnostics.MarkSuccess();
-                            await RemoveEntryAsync(entry.Id, ct).ConfigureAwait(false);
-                            changed = true;
-                            break;
-                        }
-
-                        result = retryResult;
-                    }
-
                     plugin.ClearUserToken(entry.JellyfinUserId);
                     _diagnostics.MarkFailure(result.Message);
                     await RemoveUserEntriesAsync(entry.JellyfinUserId, ct).ConfigureAwait(false);

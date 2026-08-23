@@ -45,11 +45,15 @@ public class PunchPlayScrobbleClient
 
         if (result.Outcome == PunchPlayTransportOutcome.Unauthorized)
         {
-            var refreshedToken = await _authService.RefreshAccessTokenAsync(jellyfinUserId, accessToken, ct).ConfigureAwait(false);
-            if (refreshedToken is not null)
+            var refreshResult = await _authService.RefreshAccessTokenAsync(jellyfinUserId, accessToken, ct).ConfigureAwait(false);
+            if (refreshResult.Outcome == PunchPlayTokenRefreshOutcome.Refreshed)
             {
                 _logger.LogDebug("[PunchPlay] Retrying {Action} for user {UserId} after token refresh", action, jellyfinUserId);
-                result = await _transport.SendAsync(action, refreshedToken, payload, ct).ConfigureAwait(false);
+                result = await _transport.SendAsync(action, refreshResult.AccessToken!, payload, ct).ConfigureAwait(false);
+            }
+            else if (refreshResult.Outcome == PunchPlayTokenRefreshOutcome.RetryableFailure)
+            {
+                result = PunchPlayTransportResult.RetryableFailure(refreshResult.Message);
             }
         }
 

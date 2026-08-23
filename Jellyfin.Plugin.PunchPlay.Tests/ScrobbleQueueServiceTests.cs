@@ -138,6 +138,60 @@ public class ScrobbleQueueServiceTests
     }
 
     [Fact]
+    public async Task RetryNowAsync_BacksOffWhenRefreshIsRateLimited()
+    {
+        using var pluginContext = new TestPluginContext();
+        pluginContext.Plugin.SetUserToken("user-1", "stale-token", "user-one", "refresh-token-1");
+        await WriteQueueEntriesAsync(pluginContext, CreateQueueEntry("entry-1", "pause", "user-1", retryCount: 0, nextAttemptAtUtc: DateTimeOffset.UtcNow.AddMinutes(-1)));
+
+        var handler = new DelegateHttpMessageHandler((request, _) =>
+        {
+            return request.RequestUri!.AbsolutePath == "/api/auth/refresh"
+                ? Task.FromResult(CreateJsonResponse((HttpStatusCode)429, new { error = "rate_limited" }))
+                : Task.FromResult(CreateJsonResponse(HttpStatusCode.Unauthorized, new { error = "expired" }));
+        });
+        var queueService = CreateQueueService(handler, new PluginDiagnosticsService());
+
+        await queueService.RetryNowAsync(CancellationToken.None);
+
+        var entry = Assert.Single(await ReadQueueEntriesAsync(pluginContext));
+        Assert.Equal(1, entry.RetryCount);
+        Assert.Equal("stale-token", pluginContext.Plugin.GetUserToken("user-1"));
+        Assert.Equal("refresh-token-1", pluginContext.Plugin.GetUserTokenRecord("user-1")?.RefreshToken);
+        Assert.Equal(2, handler.RequestCount);
+    }
+
+    [Fact]
+    public async Task RetryNowAsync_BacksOffTransientFailureAfterSuccessfulRefresh()
+    {
+        using var pluginContext = new TestPluginContext();
+        pluginContext.Plugin.SetUserToken("user-1", "stale-token", "user-one", "refresh-token-1");
+        await WriteQueueEntriesAsync(pluginContext, CreateQueueEntry("entry-1", "pause", "user-1", retryCount: 0, nextAttemptAtUtc: DateTimeOffset.UtcNow.AddMinutes(-1)));
+
+        var handler = new DelegateHttpMessageHandler((request, _) =>
+        {
+            if (request.RequestUri!.AbsolutePath == "/api/auth/refresh")
+            {
+                return Task.FromResult(CreateJsonResponse(HttpStatusCode.OK, new { access_token = "fresh-token", refresh_token = "refresh-token-2" }));
+            }
+
+            var presented = request.Headers.Authorization?.Parameter;
+            return Task.FromResult(presented == "fresh-token"
+                ? CreateJsonResponse(HttpStatusCode.ServiceUnavailable, new { error = "offline" })
+                : CreateJsonResponse(HttpStatusCode.Unauthorized, new { error = "expired" }));
+        });
+        var queueService = CreateQueueService(handler, new PluginDiagnosticsService());
+
+        await queueService.RetryNowAsync(CancellationToken.None);
+
+        var entry = Assert.Single(await ReadQueueEntriesAsync(pluginContext));
+        Assert.Equal(1, entry.RetryCount);
+        Assert.Equal("fresh-token", pluginContext.Plugin.GetUserToken("user-1"));
+        Assert.Equal("refresh-token-2", pluginContext.Plugin.GetUserTokenRecord("user-1")?.RefreshToken);
+        Assert.Equal(3, handler.RequestCount);
+    }
+
+    [Fact]
     public async Task RetryNowAsync_RetriesFutureEntriesWhenForced()
     {
         using var pluginContext = new TestPluginContext();

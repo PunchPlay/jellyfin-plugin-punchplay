@@ -52,6 +52,56 @@ public class PunchPlayScrobbleClientTests
         _ = queueService; // token/queue clearing is asserted via GetUserToken above
     }
 
+    [Fact]
+    public async Task DispatchAsync_PreservesTokenAndQueuesWhenRefreshIsRateLimited()
+    {
+        using var pluginContext = new TestPluginContext();
+        pluginContext.Plugin.SetUserToken("user-1", "stale-token", "user-one", "refresh-token-1");
+
+        var handler = new DelegateHttpMessageHandler((request, _) =>
+        {
+            return request.RequestUri!.AbsolutePath == "/api/auth/refresh"
+                ? Task.FromResult(CreateJsonResponse((HttpStatusCode)429, new { error = "rate_limited" }))
+                : Task.FromResult(CreateJsonResponse(HttpStatusCode.Unauthorized, new { error = "expired" }));
+        });
+        var diagnostics = new PluginDiagnosticsService();
+        var client = CreateClient(handler, diagnostics, out _);
+
+        await client.DispatchAsync("progress", "user-1", "stale-token", CreatePayload(), CancellationToken.None);
+
+        Assert.Equal("stale-token", pluginContext.Plugin.GetUserToken("user-1"));
+        Assert.Equal("refresh-token-1", pluginContext.Plugin.GetUserTokenRecord("user-1")?.RefreshToken);
+        Assert.Equal(1, diagnostics.QueuedScrobbleCount);
+        Assert.Equal(2, handler.RequestCount);
+    }
+
+    [Fact]
+    public async Task DispatchAsync_PropagatesCanceledRefreshWithoutClearingToken()
+    {
+        using var pluginContext = new TestPluginContext();
+        using var cts = new CancellationTokenSource();
+        pluginContext.Plugin.SetUserToken("user-1", "stale-token", "user-one", "refresh-token-1");
+
+        var handler = new DelegateHttpMessageHandler((request, ct) =>
+        {
+            if (request.RequestUri!.AbsolutePath == "/api/auth/refresh")
+            {
+                cts.Cancel();
+                return Task.FromCanceled<HttpResponseMessage>(ct);
+            }
+
+            return Task.FromResult(CreateJsonResponse(HttpStatusCode.Unauthorized, new { error = "expired" }));
+        });
+        var client = CreateClient(handler, new PluginDiagnosticsService(), out _);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            client.DispatchAsync("progress", "user-1", "stale-token", CreatePayload(), cts.Token));
+
+        Assert.Equal("stale-token", pluginContext.Plugin.GetUserToken("user-1"));
+        Assert.Equal("refresh-token-1", pluginContext.Plugin.GetUserTokenRecord("user-1")?.RefreshToken);
+        Assert.Equal(2, handler.RequestCount);
+    }
+
     private static PunchPlayScrobbleClient CreateClient(
         DelegateHttpMessageHandler handler,
         PluginDiagnosticsService diagnostics,
