@@ -6,6 +6,7 @@ Scrobble Jellyfin playback to PunchPlay with per-user account linking and device
 
 - Per-user PunchPlay account linking for shared Jellyfin servers
 - Device-code login with user code and QR flow
+- Automatic access-token refresh with rotating refresh tokens
 - Movie and TV episode scrobbling
 - Playback start, progress, pause, resume, and stop events
 - Watching-now and continue-watching state
@@ -29,6 +30,12 @@ Scrobble Jellyfin playback to PunchPlay with per-user account linking and device
 5. Install `PunchPlay`.
 6. Restart Jellyfin when prompted.
 
+## Upgrading from 2.0.15 or earlier
+
+Token refresh requires a refresh credential issued during account linking. After installing
+2.0.16, each Jellyfin user linked by an earlier plugin version must reconnect their PunchPlay
+account once. Access-token expiry is handled automatically after that one-time reconnect.
+
 ## Connect an account
 
 1. Open `Dashboard -> Plugins -> My Plugins -> PunchPlay`.
@@ -50,7 +57,7 @@ Scrobble Jellyfin playback to PunchPlay with per-user account linking and device
 - No scrobbles for a user: confirm that Jellyfin user is linked to a PunchPlay account.
 - Items are skipped: ensure the library has TMDB, IMDb, or TVDB metadata where possible.
 - Queue is growing: transient API and network failures are queued automatically, retried in the background, and can also be forced with `Retry Queue Now` in plugin diagnostics.
-- Unexpected disconnects: a `401` response from PunchPlay clears the stored token, removes that user's queued scrobbles, and requires re-linking.
+- Unexpected disconnects: expired access tokens are refreshed automatically. Re-linking is required only when refresh credentials are missing, expired, or revoked.
 - Stop below the watched threshold should save progress but not mark an item watched.
 - Stop at or above the watched threshold should mark the item watched.
 
